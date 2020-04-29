@@ -20,6 +20,7 @@ project or can evolve into a more advanced and improved design that can
 be used for other (hybrid or regular) MIDI-controllers, etc.
 
 ## Brief description
+### Main Principle
 The goal of the project is to detect the velocity of the hammers and
 turn it into MIDI velocity. This is realized by using
 [Vishay CNY70](https://datasheet.octopart.com/CNY70-Vishay-datasheet-5434663.pdf)
