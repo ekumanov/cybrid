@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "My-Piano-Controller-6-(Full-SMD)-rescue")(type Legacy)(uri "${KIPRJMOD}/My Piano Controller 6 (Full SMD)-rescue.lib")(options "")(descr ""))
+)

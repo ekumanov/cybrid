@@ -1,0 +1,123 @@
+EESchema-LIBRARY Version 2.4
+#encoding utf-8
+#
+# Connector_Generic_Conn_01x03
+#
+DEF Connector_Generic_Conn_01x03 J 0 40 Y N 1 F N
+F0 "J" 0 200 50 H V C CNN
+F1 "Connector_Generic_Conn_01x03" 0 -200 50 H V C CNN
+F2 "" 0 0 50 H I C CNN
+F3 "" 0 0 50 H I C CNN
+$FPLIST
+ Connector*:*_1x??_*
+$ENDFPLIST
+DRAW
+S -50 -95 0 -105 1 1 6 N
+S -50 5 0 -5 1 1 6 N
+S -50 105 0 95 1 1 6 N
+S -50 150 50 -150 1 1 10 f
+X Pin_1 1 -200 100 150 R 50 50 1 1 P
+X Pin_2 2 -200 0 150 R 50 50 1 1 P
+X Pin_3 3 -200 -100 150 R 50 50 1 1 P
+ENDDRAW
+ENDDEF
+#
+# Device_R
+#
+DEF Device_R R 0 0 N Y 1 F N
+F0 "R" 80 0 50 V V C CNN
+F1 "Device_R" 0 0 50 V V C CNN
+F2 "" -70 0 50 V I C CNN
+F3 "" 0 0 50 H I C CNN
+$FPLIST
+ R_*
+$ENDFPLIST
+DRAW
+S -40 -100 40 100 0 1 10 N
+X ~ 1 0 150 50 D 50 50 1 1 P
+X ~ 2 0 -150 50 U 50 50 1 1 P
+ENDDRAW
+ENDDEF
+#
+# My-Piano-Controller---Sensor-(3-wire)-rescue_CNY70-CNY70
+#
+DEF My-Piano-Controller---Sensor-(3-wire)-rescue_CNY70-CNY70 U 0 40 Y N 1 L N
+F0 "U" -200 220 50 H V L BNN
+F1 "My-Piano-Controller---Sensor-(3-wire)-rescue_CNY70-CNY70" -200 -280 50 H V L BNN
+F2 "DIPS254W50P254L710H600Q4" 0 0 50 H I L BNN
+F3 "CNY70" 0 0 50 H I L BNN
+F4 "None" 0 0 50 H I L BNN
+F5 "PCB Mount Vishay" 0 0 50 H I L BNN
+F6 "Vishay" 0 0 50 H I L BNN
+F7 "CNY70 Series 1 mA 1.25 V 950 nm 200 mW Reflective Optical Sensor 4 Pin" 0 0 50 H I L BNN
+F8 "Unavailable" 0 0 50 H I L BNN
+DRAW
+S 35 -100 65 100 0 0 0 F
+P 2 0 0 10 -200 -200 200 -200 N
+P 2 0 0 10 -200 200 -200 -200 N
+P 2 0 0 10 -145 50 -95 -25 N
+P 2 0 0 6 -95 -100 -200 -100 N
+P 2 0 0 6 -95 -100 -95 -25 N
+P 2 0 0 10 -95 -25 -145 -25 N
+P 2 0 0 6 -95 -25 -95 50 N
+P 2 0 0 10 -95 -25 -45 50 N
+P 2 0 0 10 -95 50 -145 50 N
+P 2 0 0 6 -95 100 -200 100 N
+P 2 0 0 6 -95 100 -95 50 N
+P 2 0 0 10 -45 -25 -95 -25 N
+P 2 0 0 10 -45 50 -95 50 N
+P 2 0 0 6 50 0 150 -100 N
+P 2 0 0 6 150 -100 200 -100 N
+P 2 0 0 6 150 100 50 0 N
+P 2 0 0 6 150 100 200 100 N
+P 2 0 0 10 200 -200 200 200 N
+P 2 0 0 10 200 200 -200 200 N
+P 3 0 0 6 150 100 100 80 130 50 F
+X A A -400 100 200 R 40 40 0 0 P
+X CATH CATH -400 -100 200 R 40 40 0 0 P
+X COLL COLL 400 -100 200 L 40 40 0 0 P
+X E E 400 100 200 L 40 40 0 0 P
+ENDDRAW
+ENDDEF
+#
+# power_GND
+#
+DEF power_GND #PWR 0 0 Y Y 1 F P
+F0 "#PWR" 0 -250 50 H I C CNN
+F1 "power_GND" 0 -150 50 H V C CNN
+F2 "" 0 0 50 H I C CNN
+F3 "" 0 0 50 H I C CNN
+DRAW
+P 6 0 1 0 0 0 0 -50 50 -50 0 -100 -50 -50 0 -50 N
+X GND 1 0 0 0 D 50 50 1 1 W N
+ENDDRAW
+ENDDEF
+#
+# power_PWR_FLAG
+#
+DEF power_PWR_FLAG #FLG 0 0 N N 1 F P
+F0 "#FLG" 0 75 50 H I C CNN
+F1 "power_PWR_FLAG" 0 150 50 H V C CNN
+F2 "" 0 0 50 H I C CNN
+F3 "" 0 0 50 H I C CNN
+DRAW
+P 6 0 1 0 0 0 0 50 -40 75 0 100 40 75 0 50 N
+X pwr 1 0 0 0 U 50 50 0 0 w
+ENDDRAW
+ENDDEF
+#
+# power_VCC
+#
+DEF power_VCC #PWR 0 0 Y Y 1 F P
+F0 "#PWR" 0 -150 50 H I C CNN
+F1 "power_VCC" 0 150 50 H V C CNN
+F2 "" 0 0 50 H I C CNN
+F3 "" 0 0 50 H I C CNN
+DRAW
+C 0 75 25 0 1 0 N
+P 2 0 1 0 0 0 0 50 N
+X VCC 1 0 0 0 U 50 50 1 1 W N
+ENDDRAW
+ENDDEF
+#
+#End Library

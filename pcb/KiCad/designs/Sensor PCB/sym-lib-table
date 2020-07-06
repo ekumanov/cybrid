@@ -1,0 +1,3 @@
+(sym_lib_table
+  (lib (name "My-Piano-Controller---Sensor-(3-wire)-rescue")(type Legacy)(uri "${KIPRJMOD}/My Piano Controller - Sensor (3-wire)-rescue.lib")(options "")(descr ""))
+)
