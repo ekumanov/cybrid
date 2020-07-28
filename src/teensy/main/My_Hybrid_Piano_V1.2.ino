@@ -22,7 +22,8 @@
 #define note5_2 11
 #define note5_3 12
 
-#define HALF_PEDAL A21
+// A21 for Teensy 3.6, A16 for Teensy 4.1
+#define HALF_PEDAL A16
 
 #define GROUP01 35
 #define GROUP02 36
@@ -467,7 +468,11 @@ void loop() {
 
 void checkNotes() {
   // use a redundant digitalReadFast to introduce a slight delay for the pull-up resistors
+  // one or two of these is OK for Teensy 3.6, four or more are needed for Teensy 4.1
   digitalReadFast(note1_1);
+  digitalReadFast(note2_1);
+  digitalReadFast(note3_1);
+  digitalReadFast(note4_1);
 
   currentMidiNote = currentMidiNote1;
   if (digitalReadFast(note1_1) == LOW) {
