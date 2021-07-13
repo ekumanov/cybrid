@@ -268,8 +268,11 @@ I will paste here raw excerpts from emails if it can help.**
 All SMD elements are of 0603 size/footprint which according to my research at the time was the smallest possible size that's still possible to be hand soldered. It's pretty tiny as it turned out, so I used one of those specialty glasses (for jewelry, etc.) that you put on your head with changeable magnification glasses.
 
 There are three resistor values that have been used:
+
 240 Ohm one on each sensor boards: https://store.comet.bg/en/Catalogue/Product/9812/
+
 4.7 kOhm (5 on each module board R18, R28, R38, R48, R58, these are the resistors that are on top of the module board above the trimpots): https://store.comet.bg/en/Catalogue/Product/9910/
+
 10 kOhm - all other resistors: https://store.comet.bg/en/Catalogue/Product/35586/
 
 On the Teensy board I haven't soldered any resistors. My idea was to limit current draw for powering sustain pedals, so there's place for resistors but that needs to be calculated ad hoc. I was in a hurry, so haven't limited the Kawai pedal but there seems to be no problems.
