@@ -261,6 +261,58 @@ TBD
 
 ### TBD (more details coming...)
 
+### Misc Info
+**Because I've been communicating with some people and got some questions,
+I will paste here raw excerpts from emails if it can help.**
+
+All SMD elements are of 0603 size/footprint which according to my research at the time was the smallest possible size that's still possible to be hand soldered. It's pretty tiny as it turned out, so I used one of those specialty glasses (for jewelry, etc.) that you put on your head with changeable magnification glasses.
+
+There are three resistor values that have been used:
+240 Ohm one on each sensor boards: https://store.comet.bg/en/Catalogue/Product/9812/
+4.7 kOhm (5 on each module board R18, R28, R38, R48, R58, these are the resistors that are on top of the module board above the trimpots): https://store.comet.bg/en/Catalogue/Product/9910/
+10 kOhm - all other resistors: https://store.comet.bg/en/Catalogue/Product/35586/
+
+On the Teensy board I haven't soldered any resistors. My idea was to limit current draw for powering sustain pedals, so there's place for resistors but that needs to be calculated ad hoc. I was in a hurry, so haven't limited the Kawai pedal but there seems to be no problems.
+
+All capacitors are 100 nF (there are 6 capacitors on each module board **on the back side**, they are the only elements to be soldered on the back side besides the sockets that connect the sensor boards): https://store.comet.bg/en/Catalogue/Product/50624/
+
+The trimpots are 10k, however due to insufficient quantity I also purchased 20k, I think it makes no difference:
+https://store.comet.bg/Catalogue/Product/5925/
+https://store.comet.bg/en/Catalogue/Product/6318/
+
+The comparators are LM339AD and are through the Farnell catalog: https://store.comet.bg/en/CatalogueFarnell/Product/1895017/
+
+The transceivers are SN74LVC245ADWR, however they seem to not be available anymore. I see a similar part (https://store.comet.bg/CatalogueFarnell/Product/506771/) which is however TSSOP-20 and I'm not sure if its footprint is the same as SOIC-20 as the original part. Needs to be checked. (P.S. Seems like half the size, so not compatible)
+
+P.P.S. The transceivers are available at Mouser: https://eu.mouser.com/productdetail/texas-instruments/sn74lvc245adwr?qs=WzgTT80quPGdOFCXqni3uA==
+
+Here are some of the other parts I ordered:
+https://store.comet.bg/en/Catalogue/Product/5003090/
+https://store.comet.bg/en/CatalogueFarnell/Product/291323/
+https://store.comet.bg/en/Catalogue/Product/286934/
+https://store.comet.bg/en/Catalogue/Product/10079/#e30%3D
+https://store.comet.bg/en/Catalogue/Product/10151/
+https://store.comet.bg/en/Catalogue/Product/10151/
+https://store.comet.bg/en/Catalogue/Product/2944/#e30%3D
+https://store.comet.bg/en/Catalogue/Product/3116/#e30%3D
+https://store.comet.bg/en/Catalogue/Product/17820/#e30%3D (soldered on the backside of the module board, facing the sensor boards, so that short 10cm three-wire female-female dupont cables I ordered through some Chinese eBay seller can be used to connect each sensor board to the module boards, I don't have the link for the cables anymore)
+https://store.comet.bg/en/Catalogue/Product/20826/ (I cut those into smaller 3-pin pieces which was PITA, these are the corresponding connectors on the sensor boards to the above part. Before attaching these two parts you need to really check what the mechanical placement will be of your sensor boards and module boards on your piano and from there to decide whether you need angled or straight sockets, etc. their orientation, whether you mount them on the backside of the sensor board or probably an angled one on the front or back, etc. it's flexible and depends on your construction and ability to connect in either straight line or probably a n arced cable... I thought a lot on that and ultimately decided on my current variant visible also in the pictures)
+https://store.comet.bg/en/Catalogue/Product/48762/ - used to daisy-chain power from a module board to module board, two of these per module board
+
+Regarding the CNY70 sensor, it's soldered so that the writings/label on the sensor-cube (there is some text only on one of its sides) is next to the label "CNY70" on the sensor board. The chips are soldered so that the notch (small marking/hole) matches a corresponding small circle printed on the PCB.
+
+To daisy-chain the power between module boards I used single-core hard cables that I bought from a hobby-shop, those cables are used for breadboards.
+
+On the Teensy board there's the possiblity to connect a jumper that will get the 3.3V from the Teensy but I wouldn't recommend it and I don't use it. Intead I used an improvised 3.3V regulator that is getting 5V from the main USB-power line (the iPad charger), look at the pictures, a bit awkward but works. I don't remember the regulator part, I bought by asking on the store but there's some writing on it and I can shoot it. But I guess every regulator will work since the 3.3V consumption isn't high.
+
+On each module board you need to use a jumper to denote the module board index by which it will be read by the software. On the left side of the IDC connector top to bottom are 1-9, and on the right side top to bottom are 10-18, you start with 1 at the lowest part of the keyboard.
+
+Making the IDC cable is major PITA. I created my own clamping contraption, you can see it on the pictures. Make this your last step because the sensor boards are not equally spaced because due to the action brackets the hammers are grouped and so some module boards will not be centered behind adjacent 5 sensors but would be behind 5 sensors with a bracket in between. So once you mount the module boards, then you design the IDC cable. And mine was made intentionally wavy because I already wasted one trying to make it straight but that's a difficult task.
+
+Also, seems like a I screwed up the Teensy IDC orientation and so to make the IDC cable finally connect at the Teensy without twisting it, the Teensy board needs to be upside-down
+
+For the sustain pedal, I power it from the Teensy PCB and it's connected to A21 on that board, however they swapped it between Teensy 3.6 and 4.1, so on the 4.1 that's not A21 but luckily it's still an analog input with another name, can't remember, maybe A20 (see in the code I have a comment for whether you use 3.6 or 4.1).
+
 ### Pictures
 
 <img src="img/IMG_0276.jpeg" width="400">
