@@ -23,6 +23,8 @@ project. It may be used as it is for anyone willing to recreate that
 project or can evolve into a more advanced and improved design that can
 be used for other (hybrid or regular) MIDI-controllers, etc.
 
+If you would like to discuss this project, there's a discussion thread on the [PianoClack Forum](https://pianoclack.com/forum/d/107-cybrid-a-diy-midi-controller-with-grand-piano-action)
+
 Update: There's now a great project by Jay Kominek who is a software developer with a background in embedded development
 and electronics. His project is inspired by Cybrid but is apparently better designed from the ground
 up: [https://github.com/jkominek/piano-conversion/](https://github.com/jkominek/piano-conversion/)
