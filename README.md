@@ -194,7 +194,7 @@ The PCB-s are designed in the free KiCad editor.
 The program is written in the Arduino compatible language of
 Teensyduino. It would sequentially enable each Note module (a note
 module is serving 5 notes x 3 inputs). For each module all the 15 inputs
-are being read. For each optical sensor there are three predefined
+are read. For each optical sensor there are three predefined
 sensor distances (set through trimpots and with the calibration utility
 programs) that are referred to in the code as sensor1, sensor2, sensor3.
 Sensor3 corresponds to the damper being removed from the string, it is
@@ -204,9 +204,9 @@ bit further to allow for the scanning logic to catch that moment because
 the hammer will rebound quickly and sensor1 will be activated for only a
 brief moment).
 
-***Active low* logic is being used.**
+***Active low* logic is used.**
 
-Sensor distance signal lines are being active as long as the hammer is
+Sensor distance signal lines stay active as long as the hammer is
 at this distance or closer to the rail. This means when sensor1 is
 active (low), sensor2 and sensor3 are also active, etc.
 
@@ -215,15 +215,15 @@ When the hammer activates sensor2 for the first time, it means we
 
 When the hammer activates sensor1 for the first time, it means we have a
 "hit" and so we produce a MIDI note-on event based on the duration. A
-velocity is being obtained through an in-memory map that holds
-logarithmic velocity values being pre-calculated.
+velocity is obtained through an in-memory map that holds
+logarithmic velocity values that have been pre-calculated.
 
 On its way back, if the key is held, the hammer will stay within sensor3
 activation region and so the sound will sustain. Once the key is
 released, the hammmer will deactivate sensor3 (high signal) and that's
 when MIDI note-off is sent.
 
-**These timestamp recordings and events are being recorded sequentially
+**These timestamp recordings and events are recorded sequentially
 (group by group, input line by input line), because we want to give
 equal chance for each event to be recorded as soon as it happens. For
 instance, once we read the event "hammer passed through C4 middle
@@ -233,11 +233,10 @@ only on the next full loop. Therefore it's of the highest importance
 that there's no delay in any scanning speed. The fastest the entire loop
 finishes, the more precise the velocity calculation will be.**
 
-TBD (velocity map calculation) for quick calculation a velocity map is
-being pre-calculated on program startup and held in memory to allow for
-a quick "duration -> MIDI velocity" value to read from memory rather
-than being calculated (since it also includes logarithms, etc. and
-that's slow.)
+TBD (velocity map calculation) for quick calculation a velocity map is 
+pre-calculated on program startup and held in memory to allow for
+a quick "duration -> MIDI velocity" value to be read from memory rather
+than being calculated all the time (since it also includes logarithms, etc. which is slow.)
 
 TBD (group velocity offset calculation) the high keys hammers are
 lighter than the low ones. If we don't account for that, the produced
