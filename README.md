@@ -4,10 +4,21 @@
 
 ## Introduction
 
-**Cybrid** is based on a DIY project Evgeni Kumanov (AKA
-***Cyber**Gene*) created in 2020 for turning a grand piano action into a MIDI controller. In the digital piano
-terminiology, instruments with a real wooden piano action are called ***hybrid*** pianos, hence the name Cybrid (from
-CyberGene and hybrid), as one member on the PianoWorld forums suggested. Here's a demo of the finished controller (
+**Cybrid** is a DIY project I finished in 2020. The main goal was to turn a grand piano action into a MIDI controller.
+In digital piano terminiology instruments with a real wooden piano action are called hybrid pianos. I own
+one such instrument, the Yamaha AvantGrand N1X which is a digital piano with real grand piano action and realistic
+piano hammers, but these hammers don't strike strings, instead they are stopped by a cushioning rail.
+There are optical sensors that detect hammer velocity and produce digital sound.
+In other words, it's a hybrid between an acoustic piano and a digital piano. I really like the Yamaha AvantGrand concept
+and wondered if I can create something similar as a DIY project. Since I participate on various Internet piano forums
+with the CyberGene nickname, another user suggested that I name the project Cybrid (from **Cyber**Gene and **hybrid**).
+
+I am a Java engineer and had no prior experience with programmable boards, low-level programming, electronics, DIY,
+woodowrking, metal working, piano regulation, etc. which is why it took me quite some time to learn the basics of all these
+things and combine them to produce the final project. It is also why some decisions I made are rather clumsy
+and the final result is not very polished. There are now other similar projects which are better designed.
+
+Here's a demo of the finished controller (
 Ctrl-click on the picture to open the YouTube video in a new tab):
 
 <a href="http://www.youtube.com/watch?feature=player_embedded&v=x7ZbjIRRwVg
@@ -22,7 +33,7 @@ etc.
 If you would like to discuss this project, there's a discussion thread on
 the [PianoClack Forum](https://pianoclack.com/forum/d/107-cybrid-a-diy-midi-controller-with-grand-piano-action)
 
-Update: There's now a great project by Jay Kominek who is a software developer with a background in embedded development
+There's a great project by Jay Kominek who is a software developer with a background in embedded development
 and electronics. His project is inspired by Cybrid but is apparently better designed from the ground
 up: [https://github.com/jkominek/piano-conversion/](https://github.com/jkominek/piano-conversion/)
 
