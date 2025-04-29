@@ -7,8 +7,8 @@
 **Cybrid** is a DIY project I finished in 2020. The main goal was to turn a grand piano action into a MIDI controller.
 In digital piano terminiology instruments with a real wooden piano action are called _hybrid_ pianos. I own
 one such instrument, the Yamaha AvantGrand N1X which is a digital piano with real grand piano action and realistic
-piano hammers that are stopped by a cushioning rail instead of striking strings.
-There are optical sensors that detect hammer velocity and produce digital sound.
+piano hammers that are stopped by a cushioning rail instead of strings.
+There are optical sensors that detect the hammer velocity and produce digital piano sound.
 In other words, it's a hybrid between an acoustic piano and a digital piano. I really like the Yamaha AvantGrand concept
 and wondered if I can re-create something similar as a DIY project. Since I participate on various Internet piano forums
 with the CyberGene nickname, another user suggested that I name the project Cybrid (from **Cyber**Gene and **hybrid**).
@@ -16,40 +16,35 @@ with the CyberGene nickname, another user suggested that I name the project Cybr
 I am a Java engineer and had no prior experience with programmable boards, low-level programming, electronics, DIY,
 woodowrking, metal working, piano regulation, etc. which is why it took me quite some time to learn the basics of all these
 things and combine them to produce the final project. It is also why some decisions I made are rather clumsy
-and the final result is not very polished. There are now other similar projects which are better designed.
+and the final result is not very polished. I'm glad this project served as an inspiration to other similar projects though.
+Soome of them are better designed and are also more easily reproducible.
 
-Here's a demo of the finished controller (click on the picture to open the YouTube video in a new tab):
+Here's a demo of the finished Cybrid controller (click on the picture to open the YouTube video in a new tab):
 
 [![Watch the video](https://img.youtube.com/vi/x7ZbjIRRwVg/maxresdefault.jpg)](https://youtu.be/x7ZbjIRRwVg)
 
-In its initial state this GitHub project contains just the PCB design, the software and the mechanical
-considerations/descriptions of that DIY project. It may be used as it is for anyone willing to recreate that project or
-can evolve into a more advanced and improved design that can be used for other (hybrid or regular) MIDI-controllers,
+This GitHub project contains just the PCB design, the software and the mechanical
+considerations/descriptions of the controller. It may be used "as is" for anyone willing to recreate that project, or
+can evolve into a more advanced and improved design that can be used as a basis, or inspiration for other (hybrid or regular) MIDI-controllers,
 etc.
 
 If you would like to discuss this project, there's a discussion thread on
 the [PianoClack Forum](https://pianoclack.com/forum/d/107-cybrid-a-diy-midi-controller-with-grand-piano-action)
 
-There's a great project by Jay Kominek who is a software developer with a background in embedded development
-and electronics. His project is inspired by Cybrid but is apparently better designed from the ground
-up: [https://github.com/jkominek/piano-conversion/](https://github.com/jkominek/piano-conversion/)
-
 ## Brief description
 
 ### Main Principle
 
-The goal of the project is to detect the velocity of the hammers and turn it into MIDI velocity. This is realized by
+The goal of the project is to detect the velocity of the piano hammers and trasnalate it into MIDI velocity. This is realized by
 using
 [Vishay CNY70](https://datasheet.octopart.com/CNY70-Vishay-datasheet-5434663.pdf)
 optical sensors and
 [Texas Instruments LM339](https://www.ti.com/lit/ds/symlink/lm2901.pdf)
 voltage comparators (LM339AD package).
 
-**The main principle of using voltage comparators to turn continuous analog signal into digital binary signals has been
+**The main principle of using voltage comparators to turn continuous analog signals into digital binary signals has been
 suggested by Marcos Daniel, a member of the PianoWorld forums. Everything else, including the multiplexing, PCB design,
-Teensy code and integration with a real grand piano action has been done by me. Before starting this project I had
-almost no prior knowledge of electronics, PCB design and microcontrollers which is why many design decisions are
-probably far from optimal. Hopefully smart guys can improve and optimize it further.**
+Teensy code and integration with a real grand piano action has been done by me.**
 
 * The CNY70 is an optical proximity sensor that consists of a photoemitter (a LED) and a phototransistor. The
   phototransistor will change its collector current depending on the proximity of subjects to the sensor
@@ -59,22 +54,22 @@ probably far from optimal. Hopefully smart guys can improve and optimize it furt
   voltage selected through a trimpot and the other input is the phototransistor output voltage. If the phototransistor
   output voltage is higher than the reference voltage, the output of the comprator will be digital 1, otherwise it will
   be digital 0.
-* Thus we can turn the continuous analog sensor signal into discrete digital binary value that is determined by whether
-  the subject is closer than a predefined distance
+* Thus we can turn the continuous analog sensor signal into a discrete digital binary value that changes when
+  the subject crosses a predefined distance
 
-This is important because the LM339 voltage comparator is very fast when comparing two voltages. It takes just a few
-nanoseconds for the comparator to switch its digital state. This will allow for a very fast detection of distance, in
-the sense of "the hammer is at the predefined distance (or closer)", i.e. the comparator will provide a digital output
+That is important because the LM339 voltage comparator is very fast when comparing two voltages. It takes just a few
+nanoseconds to switch its digital state. That allows for a very fast distance detection, or more specifically whether
+the hammer is either closer than, or farther than the preset distance point. In other words, the comparator will provide a digital output
 of 1 whenever the hammer crosses that distance and stays closer to the sensor, and will switch back to zero when the
-hammer crosses that point on its way back and moves away from it. By using this principle, we can avoid slow
-analog-to-digital conversion. (As you will see in the following paragraphs, scanning through all the 88 keys of a piano,
-i.e. detecting hammer position at multiple proximity positions in a loop won't work if we rely on proper ADC-conversion
-because most programmable controllers such as Arduino/Teensy, etc. have only a few (1 or 2) ADC chips and a single
+hammer crosses that point on its way back and moves away from it. By using that principle, we can avoid slow
+analog-to-digital conversion. (As you will see in the following paragraphs, if we scan through all 88 keys of a piano,
+and rely on just ADC to read the exact position of each hammer, might be a tricky task for many reasons.
+First, because most programmable controllers such as Arduino/Teensy, etc. have only a few (1 or 2) ADC chips and a single
 conversion takes microseconds which would cumulatively lead to inability to scan the entire keyboard without introducing
-huge latency and without missing the very fast hammer motion. Even if fast ADC-s are used, it will require that we
-multiplex analog signals and that's not a trivial task)
+huge latency and without missing the very fast hammer motion. And second, even if fast ADC-s are used, it will require that we
+multiplex analog signals and that's not a trivial task since there will be noise, etc.)
 
-So, we can configure two distance points through two trimpots and two voltage comprators. We will have two digital
+So, we can configure two preset distance points through two trimpots and use two voltage comprators. We will have two digital
 outputs from the two comparators and by measuring the time it takes for the hammer to pass between the two points (i.e.
 the comprators' outputs switch from 0 to 1), we can calculate velocity.
 
@@ -84,9 +79,9 @@ the comprators' outputs switch from 0 to 1), we can calculate velocity.
 
 A standard way of reading multiple sensors through limited number of inputs is through multiplexing, i.e. using
 specialized chips that can
-(roughly speaking) switch between multiple inputs and channel them through a single line. However a particular problem
+(roughly speaking) switch between multiple inputs and then channel them through a single line. However a particular problem
 with this approach is that there is a switch delay and in this particular implementation scanning speed is of highest
-importance. To work around this we can use a programmable controller with as many inputs as possible, and that's
+importance. To work around that, we can use a programmable controller with as many inputs as possible, and one such board is the
 [Teensy USB Development Board](https://www.pjrc.com/teensy/). It has 58 digital input/output lines.
 
 #### Grouping
@@ -109,14 +104,14 @@ all the 18 groups.
 
 **18 outputs + 15 inputs = 33 digital input/outputs.**
 
-Seems like we can go without using a mux/demux chips. Instead we will share inputs between groups. However the problem
-is if we just wire the corresponding inputs of the groups and since they will continuously generate differing signals (
-one group can generate high signal at the same time another group will generate low signal), this means they will be
-short-circuiting themselves. To avoid this we will use digital transceiver chips. A transceiver is a simple device that
+Seems like we can go without using a mux/demux chips. Instead we will share inputs between groups. However, the problem
+is if we just wire the corresponding inputs of the groups, and since they will continuously generate differing signals (
+one group can generate high signal at the same time another group will generate low signal), it means they will be
+short-circuiting themselves. To avoid that, we will use digital transceiver chips. A transceiver is a simple device that
 has a certain number of digital inputs and digital outputs. It will repeat on the outputs the same digital signal that
-it has on the corresponding input. However each chip has also an enable/disable line. When in disabled state, the
-outputs will be in high impedance state (regardless of input signals)
-. This is how we solve the problem of short-circuiting. For the current solution we use
+it has on the corresponding input. Each transceiver chip also has an enable/disable line. When in disabled state, the
+outputs will be in high impedance state (regardless of input signals), 
+and that is how we solve the problem of short-circuiting. For the current solution we use
 [SN74LVC245A](https://www.ti.com/lit/ds/symlink/sn74lvc245a.pdf) Octal Bus Transceivers With 3-State Outputs (
 SN74LVC245ADWR package).
 
@@ -124,9 +119,9 @@ SN74LVC245ADWR package).
 
 There are three types of printed circuit boards
 
-* Sensor PCB - these are very small PCB-s each containing a single CNY70 sensor and placed above each hammer shank base.
+* **Sensor PCB** - these are very small PCB-s each containing a single CNY70 sensor and placed above each hammer shank base.
   In a 88-key piano there will be 88 of these. 5 of these connect to a single Note PCB.
-* Note PCB - these are the group modules. Each one serves 5 Sensor PCB-s. Each Sensor PCB is connected through three
+* **Note PCB** - these are the group modules. Each one serves 5 Sensor PCB-s. Each Sensor PCB is connected through three
   wires (5V, signal, GND). There are three trimpots per sensor PCB, for setting the predetermined detection distances.
   The uppermost trimpot is for sensor 1 which is the closest distance to the hammer stop rail. The Note PCB-s also
   contain a jumper that is set to one of 18 positions to determine the group number of the Note PCB. Note PCB-s also
@@ -136,7 +131,7 @@ There are three types of printed circuit boards
   output for chaining to the next Note PCB. There are two voltages because the CNY70 sensors and the comparators are
   powered by 5V, however the digital signals from the transceivers as well as their power supply is 3.3V. The Teensy 3.6
   controller supports only 3.3V voltage (unlike Teensy 3.5 and older but they are slower)
-* Teensy PCB. This one contains the Teensy controller, an IDC34 socket for controlling the Note PCB-s, power
+* **Teensy PCB** - this one contains the Teensy controller, an IDC34 socket for controlling the Note PCB-s, power
   inputs/outputs to chain to the Note PCB-s, and possibility to connect other devices (e.g. a sustain half-pedal to the
   analog inputs.) It has s USB-B input that's used only for power input. The Teensy controller itself has a micro-USB
   for connection to the computer to transmit MIDI. The Teensy controller itself is powered through that USB connection.
@@ -198,7 +193,40 @@ TBD (half-pedal mapping) uses the ADC module.
 
 #### Calibration
 
-TBD
+_(Copy-paste from a forum discussion)_
+
+If you mean the Calibrate_Sensor_1/2/3 programs in the utils folder, those are actually temporary programs meant to assist in calibrating the sensors. Let me do some explanations first:
+
+Not sure why I used the confusing word "sensor" but I actually meant sensor "point". Each optical sensor is used to detect three predefined distances of each hammer:
+
+- Point 3: Hammer at half the distance between rest point and stop rail. When the hammer is above that point, I consider this as the damper being lifted, so once I detect a hit and send a Note ON event, then I will wait for the hammer to drop below this point and is when I will send Note OFF.
+- Point 2: Hammer at 1mm from the stop rail (this is where hammer is released from the jack, i.e. the escapement), we start measuring duration from this point
+- Point 1: Hammer at (or very close to) the stop-rail, this is where we stop measuring duration and derive velocity from it
+
+Now, through the trimpots you set where those three distances for each sensor (hence hammer) are. In order to quickly do that, I created the three helper programs for each sensor point.
+
+Here's the procedure:
+- Upload the corresponding program for the corresponding "sensor" point (1, 2, 3).
+- The program is a very simple logic that detects if any sensor (for any hammer) is at a distance equal or closer to the corresponding point and if true, will lit the Teensy LED
+
+To facilitate the initial rough calibration I use:
+
+- A simple wooden block that has such dimensions that when I put it at the stop-rail and lift the hammer, so that the hammer touches the block, then hammer is at exactly half the blow-distance (point 3).
+
+- I use a thin plastic strip with 1mm thickness for point 2.
+
+- For point 1 I just lift the hammer until it touches the stop-rail.
+
+- So, depending on which of these three utility programs are loaded, I use the corresponding wooden block, or strip, or the stop rail itself, and I lift each hammer one by one until it touches the wooden block, the strip or the stop-rail. And I observe the LED and turn the corresponding trimpot until the LED is lit.
+
+Once I am ready, I then upload the main program loop and surprisingly the above calibration is already pretty close to the final result and the piano is pretty playable at this point. It takes less than 10 minutes to do the above and I doubt you have to do it often once performed for the very first time.
+
+I then perform a finer manual adjustment without any tools, only playing the keys one by one and I devised the following procedure:
+- I play staccato notes with a high velocity and adjust the first position so that the corresponding key stops being detected. That means that I set the point way too high and the hammer cannot reach it because it's stopped by the rail before it. Then I begin to slowly back off until the hammer "appears" again. If you stop at that point, you will notice that very low velocity might still be missed because the stop-rail cushioning is not compressed enough to trigger it. Or, very high velocity strikes get missed because they are so quick, and the point is set so high, that the scanning doesn't have enough time to detect the hammer while at the point 1. That's why we need to give it some leeway and back off enough the trimpot, so that the hammer is always detected in the peak point, regardless of velocity. Once there, we have the top point set at a good enough distance
+- We then proceed to fine-setting the second point. Because adjusting the first point effectively changes the distance between it and the second point, it effectively changes the loudness of that hammer. So, I proceed fine-tuning the second point by ear, choosing a realistic velocity response of the key. This might sound like a very demanding task but surprisingly for me, it is a satisfying thing to do, since I felt like a real piano master who fine-tunes his piano. And actually it's very easy to feel where the good position is.
+- I will optionally fine-tune the third point to be where I need the note OFF to happen. My experience is it's not very important.
+
+People often comment on how the above procedure is the main reason they didn't like that solution and how tedious it is, but in fact it's a pretty quick procedure that takes no more than 20-30 minutes in total and is required only the very first time. From there on, only an occasional touch-up is needed. 
 
 ### Mechanical Piano Considerations
 
