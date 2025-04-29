@@ -5,12 +5,12 @@
 ## Introduction
 
 **Cybrid** is a DIY project I finished in 2020. The main goal was to turn a grand piano action into a MIDI controller.
-In digital piano terminiology instruments with a real wooden piano action are called hybrid pianos. I own
+In digital piano terminiology instruments with a real wooden piano action are called _hybrid_ pianos. I own
 one such instrument, the Yamaha AvantGrand N1X which is a digital piano with real grand piano action and realistic
-piano hammers, but these hammers don't strike strings, instead they are stopped by a cushioning rail.
+piano hammers that are stopped by a cushioning rail instead of striking strings.
 There are optical sensors that detect hammer velocity and produce digital sound.
 In other words, it's a hybrid between an acoustic piano and a digital piano. I really like the Yamaha AvantGrand concept
-and wondered if I can create something similar as a DIY project. Since I participate on various Internet piano forums
+and wondered if I can re-create something similar as a DIY project. Since I participate on various Internet piano forums
 with the CyberGene nickname, another user suggested that I name the project Cybrid (from **Cyber**Gene and **hybrid**).
 
 I am a Java engineer and had no prior experience with programmable boards, low-level programming, electronics, DIY,
@@ -18,12 +18,9 @@ woodowrking, metal working, piano regulation, etc. which is why it took me quite
 things and combine them to produce the final project. It is also why some decisions I made are rather clumsy
 and the final result is not very polished. There are now other similar projects which are better designed.
 
-Here's a demo of the finished controller (
-Ctrl-click on the picture to open the YouTube video in a new tab):
+Here's a demo of the finished controller (click on the picture to open the YouTube video in a new tab):
 
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=x7ZbjIRRwVg
-" target="_blank"><img src="http://img.youtube.com/vi/x7ZbjIRRwVg/0.jpg"
-alt="IMAGE ALT TEXT HERE" width="240" height="180" border="10" /></a>
+[![Watch the video](https://img.youtube.com/vi/x7ZbjIRRwVg/maxresdefault.jpg)](https://youtu.be/x7ZbjIRRwVg)
 
 In its initial state this GitHub project contains just the PCB design, the software and the mechanical
 considerations/descriptions of that DIY project. It may be used as it is for anyone willing to recreate that project or
