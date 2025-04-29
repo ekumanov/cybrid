@@ -17,9 +17,9 @@ I am a Java engineer and had no prior experience with programmable boards, low-l
 woodowrking, metal working, piano regulation, etc. which is why it took me quite some time to learn the basics of all these
 things and combine them to produce the final project. It is also why some decisions I made are rather clumsy
 and the final result is not very polished. I'm glad this project served as an inspiration to other similar projects though.
-Soome of them are better designed and are also more easily reproducible.
+Some of them are better designed and are also more easily reproducible.
 
-Here's a demo of the finished Cybrid controller (click on the picture to open the YouTube video in a new tab):
+Here's a demo of the finished Cybrid controller (ctrl-click on the picture to open the YouTube video in a new tab):
 
 [![Watch the video](https://img.youtube.com/vi/x7ZbjIRRwVg/maxresdefault.jpg)](https://youtu.be/x7ZbjIRRwVg)
 
