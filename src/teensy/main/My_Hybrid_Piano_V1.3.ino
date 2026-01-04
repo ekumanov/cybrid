@@ -86,15 +86,16 @@
 /**
  * MATRIX SETTLING TIME (Nanoseconds):
  * -------------------------------------------------------------
- * The time to wait after pulling a Group Line LOW (activating the comparators)
- * before reading the sensor outputs. This accounts for:
- * 1. Cable capacitance (rise/fall time of the signal).
- * 2. Comparator response time.
- * * TUNING: Start at 500ns. Lower it until "Ghost Notes" appear, then double it.
- *
- * CyberGene's measurements confirm that the RC time constant is <100ns.
- * * 100ns is a safe, high-speed default for Teensy 4.1.
- * * If "Ghost Notes" appear, increase this to 200 or 500 and do the above tuning.
+ * The mandatory "Dead Time" between disabling one Group and enabling the next.
+ * * HARDWARE CONTEXT:
+ * - Groups use SN74LVC245A Transceivers (Active Push-Pull).
+ * - Shared 1.5m IDC ribbon cable.
+ * * WHY THE DELAY IS NEEDED:
+ * 1. BUS CONTENTION: Ensures the previous transceiver is fully disconnected (High-Z)
+ * before the next one starts driving. Overlap causes short-circuits.
+ * 2. BUS STABILIZATION: Works with INPUT_PULLUP to ensure lines return to
+ * the Idle (HIGH) state cleanly between switches, preventing "Ghost Notes."
+ * * TUNING: 100ns is safe. Increase if ghosting occurs.
  */
 #define MATRIX_SETTLING_DELAY_NS 100
 
@@ -228,7 +229,8 @@ void setup() {
 
   // Initialize Comparator Input Pins
   int checkPointPins[] = {32,31,30,29,27,28,25,24,26,34,33,9,10,11,12};
-  for(int p : checkPointPins) pinMode(p, INPUT);
+  for(int p : checkPointPins) pinMode(p, INPUT_PULLUP);
+
   pinMode(HALF_PEDAL, INPUT);
 
   // Initialize Group Lines & Build Faulty Line Map
@@ -252,6 +254,8 @@ void setup() {
 
   // --- VELOCITY MAP GENERATION ---
   // Calculates the lookup table with Logarithmic Curve + Linear Grading.
+  // The mapping is: duration -> MIDI velocity
+  // Each group has its own mapping to provide grading.
   for (int j = 0; j < LOGICAL_GROUPS_NEEDED; j++) {
 
     // Grading Logic: Calculate multiplier based on position (Bass vs Treble)
@@ -279,7 +283,7 @@ void setup() {
   }
 
   // --- PEDAL TABLE GENERATION ---
-  // Simple linear interpolation for the Kawai 10H pot.
+  // Simple linear interpolation for the Kawai 10H continuous pedal.
   double step = 127.0 / (HIGH_PEDAL_LIMIT - LOW_PEDAL_LIMIT);
   for (int i = 0; i < 256; i++) {
     if (i < LOW_PEDAL_LIMIT) pedalCcTable[i] = 127; // Fully Pressed
@@ -302,10 +306,10 @@ void loop() {
   for (int g = 0; g < LOGICAL_GROUPS_NEEDED; g++) {
     int linePin = groupLineMap[g];
 
-    // 1. Activate Group Comparators (Active LOW)
+    // 1. Activate Group (Transceivers enabled, Active LOW)
     digitalWriteFast(linePin, LOW);
 
-    // 2. Wait for voltage to stabilize (Cable Capacitance)
+    // 2. Settling Time (Dead Time + Stabilization)
     delayNanoseconds(MATRIX_SETTLING_DELAY_NS);
 
     // 3. Define MIDI Notes for this Group
@@ -316,7 +320,7 @@ void loop() {
     activeMapGroup = g;
     scanGroup();
 
-    // 4. Deactivate Group (High Impedance / HIGH)
+    // 4. Deactivate Group (Transceivers disabled, High Impedance / HIGH)
     digitalWriteFast(linePin, HIGH);
     startNote += 5;
   }
@@ -348,7 +352,7 @@ void scanGroup() {
 void checkHammerState(int strikePin, int escapPin, int damperPin) {
 
   // 1. STRIKE ZONE (Closest Proximity)
-  // Logic: The hammer is at the peak of travel, closest to the sensor.
+  // Logic: The hammer is at the peak of travel, closest to the rail.
   // Comparator Output: LOW
   if (digitalReadFast(strikePin) == LOW) {
     if (!strikeDetected[activeMidiNote]) {
@@ -364,7 +368,7 @@ void checkHammerState(int strikePin, int escapPin, int damperPin) {
   }
 
   // 2. ESCAPEMENT ZONE (Medium Proximity)
-  // Logic: Hammer is close enough to trigger Escapement comparator,
+  // Logic: Hammer is close enough to trigger Escapement check point,
   // but NOT close enough to trigger Strike. It is "in flight".
   else if (digitalReadFast(escapPin) == LOW) {
     if (!isMeasuringVelocity[activeMidiNote]) {
@@ -376,7 +380,7 @@ void checkHammerState(int strikePin, int escapPin, int damperPin) {
   }
 
   // 3. DAMPER ZONE (Far Proximity)
-  // Logic: Hammer is detected by the furthest sensor (Damper),
+  // Logic: Hammer is detected by the furthest check point (Damper),
   // but hasn't reached Escapement. It is likely rising slowly or hovering.
   else if (digitalReadFast(damperPin) == LOW) {
     // If we drop back down to here from above, abort velocity measurement.
@@ -384,7 +388,7 @@ void checkHammerState(int strikePin, int escapPin, int damperPin) {
   }
 
   // 4. OUT OF RANGE (Rest)
-  // Logic: Hammer is too far for any sensor to detect (All HIGH).
+  // Logic: Hammer is too far for any check point to get activated (All HIGH).
   else {
     if (noteIsActive[activeMidiNote]) {
       // Hammer has fallen all the way back to rest.
