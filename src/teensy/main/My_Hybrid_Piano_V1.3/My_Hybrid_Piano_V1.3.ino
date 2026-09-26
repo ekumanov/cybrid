@@ -18,12 +18,15 @@
  * - Branch prediction optimization
  *
  * -------------------------------------------------------------
- * PERFORMANCE METRICS (Empirical Data from CyberGene):
+ * PERFORMANCE METRICS:
  * -------------------------------------------------------------
- * - Single Group Scan Duration: ~0.5µs
- * - Full Keyboard Scan (85-88 keys): ~8.9µs
- * - Scan Rate: ~112 kHz
- * - Velocity Error @ MIDI 127: < 1 velocity step
+ * - Measured by CyberGene with V1.2: full keyboard scan ~8.9µs
+ *   (~0.5µs per group, ~112 kHz scan rate), velocity error at
+ *   MIDI 127 under 1 step.
+ * - This version (not yet measured): estimated ~3-5µs per full
+ *   scan on Teensy 4.1 (~3.6µs typical), ~10-15µs on Teensy 3.6
+ *   @ 256 MHz, from emulating the compiled loop() and published
+ *   GPIO access times. Each group still gets >= 100ns to settle.
  * -------------------------------------------------------------
  * PHYSICS & DETECTION PRINCIPLE (CNY70 + Comparators):
  * -------------------------------------------------------------
@@ -62,10 +65,14 @@
 
 #include <ADC.h>
 
-// Forced inline: the pin numbers must reach digitalReadFast() as compile-time constants.
-// Otherwise every read goes through a pin lookup table, doubling the scan time.
-static inline __attribute__((always_inline)) void scanGroup();
-static inline __attribute__((always_inline)) void checkHammerState(int strikePin, int escapPin, int damperPin);
+// Forced inline: the pin numbers must reach digitalReadFast() as compile-time constants
+// (otherwise every read goes through a pin lookup table, doubling the scan time), and
+// the per-key logic must not pay a function call per key.
+struct InputSnapshot;
+static inline __attribute__((always_inline)) void readGroupInputs(InputSnapshot &s);
+static inline __attribute__((always_inline)) void processGroup(int g, const InputSnapshot &s);
+static inline __attribute__((always_inline)) void checkHammerState(byte note, byte curve, bool atStrike, bool atEscap, bool atDamper);
+static inline __attribute__((always_inline)) void waitCyclesSince(uint32_t start, uint32_t cycles);
 
 // =============================================================
 // --- USER CONFIGURATION --------------------------------------
@@ -101,6 +108,8 @@ static inline __attribute__((always_inline)) void checkHammerState(int strikePin
  * Reading too early gives stale or wrong levels ("ghost notes").
  * * TUNING: V1.2 worked with ~40-110ns (4 dummy reads); 100ns adds margin.
  * Increase if ghosting occurs.
+ * * COST: usually none. The previous group is processed while this one settles
+ * (see loop()); the wait only covers whatever part of this time is left over.
  */
 #define MATRIX_SETTLING_DELAY_NS 100
 
@@ -112,6 +121,11 @@ static inline __attribute__((always_inline)) void checkHammerState(int strikePin
  * ~8ns to release its outputs (tPHZ/tPLZ at 3.3V); 20ns covers that plus skew.
  */
 #define MATRIX_DEAD_TIME_NS 20
+
+// Both waits in CPU cycles, computed at compile time (F_CPU is the configured CPU clock).
+#define NS_TO_CYCLES(ns) ((uint32_t)(((uint64_t)F_CPU * (ns) + 999999999ULL) / 1000000000ULL))
+#define MATRIX_SETTLING_CYCLES NS_TO_CYCLES(MATRIX_SETTLING_DELAY_NS)
+#define MATRIX_DEAD_TIME_CYCLES NS_TO_CYCLES(MATRIX_DEAD_TIME_NS)
 
 // PEDAL SCAN INTERVAL:
 // 5ms = 200Hz at most, and only while the pedal moves (see the noise gate in processPedal).
@@ -142,6 +156,54 @@ static inline __attribute__((always_inline)) void checkHammerState(int strikePin
 #define N5_STRIKE   10
 #define N5_ESCAP    11
 #define N5_DAMPER   12
+
+// --- INPUT PORT SNAPSHOT ---
+// The 15 check point pins sit on a few 32-bit GPIO port registers (which ones is taken
+// from the Teensy core's CORE_PINn_PINREG / CORE_PINn_BITMASK). Reading those registers
+// once per group captures the whole group at one instant with a few reads instead of 15,
+// so it can be processed later, while the next group settles (see loop()).
+#if defined(__IMXRT1062__)
+  #define INPUT_PORTS(X) X(GPIO6_PSR) X(GPIO7_PSR) X(GPIO8_PSR) X(GPIO9_PSR)
+  #define INPUT_PORT_COUNT 4
+#else
+  #define INPUT_PORTS(X) X(GPIOA_PDIR) X(GPIOB_PDIR) X(GPIOC_PDIR) X(GPIOD_PDIR) X(GPIOE_PDIR)
+  #define INPUT_PORT_COUNT 5
+#endif
+
+struct InputSnapshot { uint32_t port[INPUT_PORT_COUNT]; };
+
+#define PINREG_ADDR(pin) PINREG_ADDR_(pin)
+#define PINREG_ADDR_(pin) ((const volatile void *)&CORE_PIN##pin##_PINREG)
+#define PIN_BITMASK(pin) PIN_BITMASK_(pin)
+#define PIN_BITMASK_(pin) (CORE_PIN##pin##_BITMASK)
+
+// All address comparisons below are between constants and fold away at compile time.
+static inline __attribute__((always_inline)) bool isCheckPointPort(const volatile void *reg) {
+  return reg == PINREG_ADDR(N1_STRIKE) || reg == PINREG_ADDR(N1_ESCAP) || reg == PINREG_ADDR(N1_DAMPER)
+      || reg == PINREG_ADDR(N2_STRIKE) || reg == PINREG_ADDR(N2_ESCAP) || reg == PINREG_ADDR(N2_DAMPER)
+      || reg == PINREG_ADDR(N3_STRIKE) || reg == PINREG_ADDR(N3_ESCAP) || reg == PINREG_ADDR(N3_DAMPER)
+      || reg == PINREG_ADDR(N4_STRIKE) || reg == PINREG_ADDR(N4_ESCAP) || reg == PINREG_ADDR(N4_DAMPER)
+      || reg == PINREG_ADDR(N5_STRIKE) || reg == PINREG_ADDR(N5_ESCAP) || reg == PINREG_ADDR(N5_DAMPER);
+}
+
+// Index of a port register in the snapshot, or -1 if it is not one of INPUT_PORTS.
+static inline __attribute__((always_inline)) int snapshotIndex(const volatile void *reg) {
+  int i = 0;
+  #define SNAPSHOT_INDEX(r) if (reg == (const volatile void *)&(r)) return i; i++;
+  INPUT_PORTS(SNAPSHOT_INDEX)
+  #undef SNAPSHOT_INDEX
+  return -1;
+}
+
+// Build-time check: every check point pin must be on a snapshotted port, otherwise its
+// input would silently read as "hammer at rest". If this fails, the build stops with an
+// undefined reference to the function below; add the missing port to INPUT_PORTS.
+void ERROR_check_point_pin_not_on_an_INPUT_PORTS_register();
+#define CHECK_ON_INPUT_PORT(pin) \
+  if (snapshotIndex(PINREG_ADDR(pin)) < 0) ERROR_check_point_pin_not_on_an_INPUT_PORTS_register();
+
+// True when the hammer is within check point `pin` (comparators are active LOW).
+#define AT_POINT(s, pin) (((s).port[snapshotIndex(PINREG_ADDR(pin))] & PIN_BITMASK(pin)) == 0)
 
 // --- PERIPHERALS ---
 #define HALF_PEDAL  A16 // Connected to Kawai 10H (Pin 40 on T4.1)
@@ -240,11 +302,6 @@ byte velocityMap[VEL_GRADE_STEPS][VEL_MAP_LENGTH];
 byte pedalCcTable[256];
 int groupLineMap[LOGICAL_GROUPS_NEEDED]; // Logic Group -> Physical Pin Map
 
-// Loop State Variables
-byte noteA, noteB, noteC, noteD, noteE;
-byte activeMidiNote;
-int activeMapGroup;
-
 // Pedal Throttling
 elapsedMillis pedalUpdateTimer;
 byte lastPedalMidiValue = 0;
@@ -254,6 +311,16 @@ ADC *adc = new ADC();
 
 void setup() {
   pinMode(LED, OUTPUT);
+
+  CHECK_ON_INPUT_PORT(N1_STRIKE) CHECK_ON_INPUT_PORT(N1_ESCAP) CHECK_ON_INPUT_PORT(N1_DAMPER)
+  CHECK_ON_INPUT_PORT(N2_STRIKE) CHECK_ON_INPUT_PORT(N2_ESCAP) CHECK_ON_INPUT_PORT(N2_DAMPER)
+  CHECK_ON_INPUT_PORT(N3_STRIKE) CHECK_ON_INPUT_PORT(N3_ESCAP) CHECK_ON_INPUT_PORT(N3_DAMPER)
+  CHECK_ON_INPUT_PORT(N4_STRIKE) CHECK_ON_INPUT_PORT(N4_ESCAP) CHECK_ON_INPUT_PORT(N4_DAMPER)
+  CHECK_ON_INPUT_PORT(N5_STRIKE) CHECK_ON_INPUT_PORT(N5_ESCAP) CHECK_ON_INPUT_PORT(N5_DAMPER)
+
+  // The matrix timing uses the CPU cycle counter (already running on Teensy 4.x).
+  ARM_DEMCR |= ARM_DEMCR_TRCENA;
+  ARM_DWT_CTRL |= ARM_DWT_CTRL_CYCCNTENA;
 
   // Initialize Comparator Input Pins
   int checkPointPins[] = {32,31,30,29,27,28,25,24,26,34,33,9,10,11,12};
@@ -334,33 +401,33 @@ void setup() {
 }
 
 void loop() {
-  int startNote = 21; // Piano starts at A0
+  // --- MAIN SCANNING LOOP (pipelined) ---
+  // Each group's 15 inputs are captured at once, right after its settling time.
+  // The captured inputs are processed while the NEXT group is settling, so the
+  // settling time is spent on useful work instead of waiting.
+  InputSnapshot inputs;
 
-  // --- MAIN SCANNING LOOP ---
   for (int g = 0; g < LOGICAL_GROUPS_NEEDED; g++) {
     int linePin = groupLineMap[g];
 
     // 1. Activate Group (Transceivers enabled, Active LOW)
     digitalWriteFast(linePin, LOW);
+    uint32_t enabledAt = ARM_DWT_CYCCNT;
 
-    // 2. Settling Time (cable stabilization before reading)
-    delayNanoseconds(MATRIX_SETTLING_DELAY_NS);
+    // 2. While this group settles, process the previous group's inputs
+    if (g > 0) processGroup(g - 1, inputs);
+    waitCyclesSince(enabledAt, MATRIX_SETTLING_CYCLES); // minimum settling time
 
-    // 3. Define MIDI Notes for this Group
-    noteA = startNote; noteB = startNote + 1; noteC = startNote + 2;
-    if (PIANO_SIZE == 88 && g == 17) { noteD = 0; noteE = 0; }
-    else { noteD = startNote + 3; noteE = startNote + 4; }
-
-    activeMapGroup = GROUP_VELOCITY_CURVE[g];
-    scanGroup();
+    // 3. Capture this group's 15 inputs
+    readGroupInputs(inputs);
 
     // 4. Deactivate Group (Transceivers disabled, High Impedance / HIGH)
     digitalWriteFast(linePin, HIGH);
 
     // 5. Dead Time (the next group must not drive the lines before this one lets go)
-    delayNanoseconds(MATRIX_DEAD_TIME_NS);
-    startNote += 5;
+    waitCyclesSince(ARM_DWT_CYCCNT, MATRIX_DEAD_TIME_CYCLES);
   }
+  processGroup(LOGICAL_GROUPS_NEEDED - 1, inputs);
 
   // --- THROTTLED PEDAL LOGIC ---
   if (pedalUpdateTimer >= PEDAL_SCAN_INTERVAL_MS) {
@@ -372,65 +439,87 @@ void loop() {
 }
 
 /**
- * Scans the 5 hammers in the active group.
+ * Busy-waits until at least `cycles` CPU cycles have passed since `start`.
+ * Unsigned subtraction keeps this correct when the cycle counter wraps around.
  */
-static inline void scanGroup() {
-  activeMidiNote = noteA; if (activeMidiNote != 0) checkHammerState(N1_STRIKE, N1_ESCAP, N1_DAMPER);
-  activeMidiNote = noteB; if (activeMidiNote != 0) checkHammerState(N2_STRIKE, N2_ESCAP, N2_DAMPER);
-  activeMidiNote = noteC; if (activeMidiNote != 0) checkHammerState(N3_STRIKE, N3_ESCAP, N3_DAMPER);
-  activeMidiNote = noteD; if (activeMidiNote != 0) checkHammerState(N4_STRIKE, N4_ESCAP, N4_DAMPER);
-  activeMidiNote = noteE; if (activeMidiNote != 0) checkHammerState(N5_STRIKE, N5_ESCAP, N5_DAMPER);
+static inline void waitCyclesSince(uint32_t start, uint32_t cycles) {
+  while ((uint32_t)(ARM_DWT_CYCCNT - start) < cycles) {}
+}
+
+/**
+ * Captures the 15 check point inputs of the active group (only the port registers
+ * that hold check point pins are read).
+ */
+static inline void readGroupInputs(InputSnapshot &s) {
+  int i = 0;
+  #define READ_PORT(r) s.port[i++] = isCheckPointPort(&(r)) ? (uint32_t)(r) : 0u;
+  INPUT_PORTS(READ_PORT)
+  #undef READ_PORT
+}
+
+/**
+ * Runs the hammer logic for the 5 keys of group g on its captured inputs.
+ */
+static inline void processGroup(int g, const InputSnapshot &s) {
+  byte firstNote = 21 + 5 * g; // Piano starts at A0
+  byte curve = GROUP_VELOCITY_CURVE[g];
+  checkHammerState(firstNote,     curve, AT_POINT(s, N1_STRIKE), AT_POINT(s, N1_ESCAP), AT_POINT(s, N1_DAMPER));
+  checkHammerState(firstNote + 1, curve, AT_POINT(s, N2_STRIKE), AT_POINT(s, N2_ESCAP), AT_POINT(s, N2_DAMPER));
+  checkHammerState(firstNote + 2, curve, AT_POINT(s, N3_STRIKE), AT_POINT(s, N3_ESCAP), AT_POINT(s, N3_DAMPER));
+  // The last group of an 88-key piano only has 3 keys (A#7-C8).
+  if (PIANO_SIZE == 88 && g == 17) return;
+  checkHammerState(firstNote + 3, curve, AT_POINT(s, N4_STRIKE), AT_POINT(s, N4_ESCAP), AT_POINT(s, N4_DAMPER));
+  checkHammerState(firstNote + 4, curve, AT_POINT(s, N5_STRIKE), AT_POINT(s, N5_ESCAP), AT_POINT(s, N5_DAMPER));
 }
 
 /**
  * LOGIC: Determines Hammer State based on Proximity Thresholds.
- * We scan from ClOSEST (Strike) to FURTHEST (Damper).
+ * We check from CLOSEST (Strike) to FURTHEST (Damper).
  */
-static inline void checkHammerState(int strikePin, int escapPin, int damperPin) {
+static inline void checkHammerState(byte note, byte curve, bool atStrike, bool atEscap, bool atDamper) {
 
   // 1. STRIKE ZONE (Closest Proximity)
   // Logic: The hammer is at the peak of travel, closest to the rail.
-  // Comparator Output: LOW
-  if (digitalReadFast(strikePin) == LOW) {
-    if (!strikeDetected[activeMidiNote]) {
+  if (atStrike) {
+    if (!strikeDetected[note]) {
       // Calculate final velocity based on flight time
-      unsigned long t = hammerTimer[activeMidiNote];
-      byte vel = (t < VEL_MAP_LENGTH) ? velocityMap[activeMapGroup][t] : 1;
+      unsigned long t = hammerTimer[note];
+      byte vel = (t < VEL_MAP_LENGTH) ? velocityMap[curve][t] : 1;
 
-      usbMIDI.sendNoteOn(activeMidiNote, vel, 1);
+      usbMIDI.sendNoteOn(note, vel, 1);
 
-      strikeDetected[activeMidiNote] = true;
-      noteIsActive[activeMidiNote] = true;
+      strikeDetected[note] = true;
+      noteIsActive[note] = true;
     }
   }
 
   // 2. ESCAPEMENT ZONE (Medium Proximity)
   // Logic: Hammer is close enough to trigger Escapement check point,
   // but NOT close enough to trigger Strike. It is "in flight".
-  else if (digitalReadFast(escapPin) == LOW) {
-    if (!isMeasuringVelocity[activeMidiNote]) {
+  else if (atEscap) {
+    if (!isMeasuringVelocity[note]) {
       // Hammer just entered the Flight Zone from below. Start Timer.
-      hammerTimer[activeMidiNote] = 0;
-      isMeasuringVelocity[activeMidiNote] = true;
-      strikeDetected[activeMidiNote] = false; // Reset latch
+      hammerTimer[note] = 0;
+      isMeasuringVelocity[note] = true;
+      strikeDetected[note] = false; // Reset latch
     }
   }
 
   // 3. DAMPER ZONE (Far Proximity)
   // Logic: Hammer is detected by the furthest check point (Damper),
   // but hasn't reached Escapement. It is likely rising slowly or hovering.
-  else if (digitalReadFast(damperPin) == LOW) {
+  else if (atDamper) {
     // If we drop back down to here from above, abort velocity measurement.
-    isMeasuringVelocity[activeMidiNote] = false;
+    isMeasuringVelocity[note] = false;
   }
 
   // 4. OUT OF RANGE (Rest)
   // Logic: Hammer is too far for any check point to get activated (All HIGH).
   else {
-    if (noteIsActive[activeMidiNote]) {
+    if (noteIsActive[note]) {
       // Hammer has fallen all the way back to rest.
-      usbMIDI.sendNoteOn(activeMidiNote, 0, 1); // Note Off
-      noteIsActive[activeMidiNote] = false;
+      usbMIDI.sendNoteOn(note, 0, 1); // Note Off
+      noteIsActive[note] = false;
     }
   }
 }

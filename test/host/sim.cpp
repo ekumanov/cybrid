@@ -19,6 +19,8 @@ int pinMode_[64];
 int pinLevel[64];
 long lineFights = 0;
 long busFights = 0;
+uint32_t cycleCounter = 0, demcr = 0, dwtCtrl = 0;
+GpioPort gpio6{6}, gpio7{7}, gpio8{8}, gpio9{9};
 std::vector<MidiEvent> events;
 
 static std::vector<std::pair<uint64_t, Zone>> timeline[128];
