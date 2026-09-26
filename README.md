@@ -190,6 +190,10 @@ They can also be built with [PlatformIO](https://platformio.org/) using `platfor
 * `pio run` builds all sketches (V1.3, V1.2 and the three calibration utilities) for Teensy 4.1
 * `pio run -e v1_3 -t upload` builds and flashes the main firmware (`v1_3_teensy36` targets a Teensy 3.6)
 
+`test/host/run.sh` runs the firmware against a simulation of the V1 hardware on the computer and checks that V1.3
+behaves exactly like the tested V1.2. GitHub Actions runs these tests and builds all sketches on every push; the
+`.hex` files can be downloaded from each run's artifacts and flashed with the Teensy Loader.
+
 TBD (velocity map calculation) for quick calculation a velocity map is pre-calculated on program startup and held in
 memory to allow for a quick "
 duration -> MIDI velocity" value to be read from memory rather than being calculated all the time (since it also
