@@ -179,6 +179,17 @@ other keys and sensors and we will be able to check that hammer then passed thro
 only on the next full loop. Therefore it's of the highest importance that there's no delay in any scanning speed. The
 fastest the entire loop finishes, the more precise the velocity calculation will be.**
 
+#### Building the firmware
+
+The sketches are in `src/teensy` (main firmware in `main/`, calibration utilities in `utils/`), each in its own
+folder so they open directly in the Arduino IDE with [Teensyduino](https://www.pjrc.com/teensy/td_download.html)
+(set *Tools > USB Type* to *MIDI* for the main firmware).
+
+They can also be built with [PlatformIO](https://platformio.org/) using `platformio.ini` in the repository root:
+
+* `pio run` builds all sketches (V1.3, V1.2 and the three calibration utilities) for Teensy 4.1
+* `pio run -e v1_3 -t upload` builds and flashes the main firmware (`v1_3_teensy36` targets a Teensy 3.6)
+
 TBD (velocity map calculation) for quick calculation a velocity map is pre-calculated on program startup and held in
 memory to allow for a quick "
 duration -> MIDI velocity" value to be read from memory rather than being calculated all the time (since it also
