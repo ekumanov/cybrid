@@ -175,11 +175,24 @@
  * Simulates "Graded Hammer Action" found in acoustic grands.
  * - In a real piano, bass hammers are heavier/slower than treble hammers
  * for the same input force.
- * - 0.4 means we apply a multiplier of ~1.2 to Bass keys (boosting their signal)
- * and ~0.8 to Treble keys (attenuating their signal).
+ * - 0.4 spreads the VEL_GRADE_STEPS curves from a multiplier of 1.2
+ * (curve 0, boosting the signal) down to 0.8 (last curve, attenuating it).
+ * - Which curve each group uses is set by GROUP_VELOCITY_CURVE below.
  * - This ensures a consistent "feel" across the keyboard.
  */
 #define VELOCITY_MAP_STRETCH 0.4
+
+// Number of graded velocity curves (the multiplier range above is split into this many steps).
+#define VEL_GRADE_STEPS 17
+
+/**
+ * GROUP_VELOCITY_CURVE:
+ * Velocity curve used by each logical group (A0, D1, G1, ... C8), hand-voiced
+ * on the instrument in V1.2. The lowest groups deliberately share curves 4-6
+ * (multiplier 1.1-1.05) instead of 0-3, which made the bass too loud.
+ * The 18th entry is only used by the C8 group of an 88-key piano.
+ */
+const byte GROUP_VELOCITY_CURVE[18] = {4, 4, 5, 6, 6, 6, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 16};
 
 // PEDAL CALIBRATION (Analog 0-255 range)
 #define HIGH_PEDAL_LIMIT 192 // Pedal fully UP
@@ -208,7 +221,7 @@ bool strikeDetected[128];              // State: Hammer has hit rail (Debounce l
 bool noteIsActive[128];                // State: Note is currently sounding
 
 // Lookup Tables
-byte velocityMap[LOGICAL_GROUPS_NEEDED][VEL_MAP_LENGTH];
+byte velocityMap[VEL_GRADE_STEPS][VEL_MAP_LENGTH];
 byte pedalCcTable[256];
 int groupLineMap[LOGICAL_GROUPS_NEEDED]; // Logic Group -> Physical Pin Map
 
@@ -236,6 +249,9 @@ void setup() {
   // Initialize Group Lines & Build Faulty Line Map
   int physicalIdx = 0;
   for (int i = 0; i < 18; i++) {
+    // The faulty line is shorted to another line in the cable, so it must never be
+    // driven: leave it as a high-impedance input, otherwise the two pins fight.
+    if ((i + 1) == FAULTY_LINE) { pinMode(ALL_CABLE_LINES[i], INPUT); continue; }
     pinMode(ALL_CABLE_LINES[i], OUTPUT);
     digitalWriteFast(ALL_CABLE_LINES[i], HIGH); // Idle = HIGH (Active Low)
   }
@@ -255,16 +271,19 @@ void setup() {
   // --- VELOCITY MAP GENERATION ---
   // Calculates the lookup table with Logarithmic Curve + Linear Grading.
   // The mapping is: duration -> MIDI velocity
-  // Each group has its own mapping to provide grading.
-  for (int j = 0; j < LOGICAL_GROUPS_NEEDED; j++) {
+  // Each curve has its own multiplier to provide grading (see GROUP_VELOCITY_CURVE).
+  for (int j = 0; j < VEL_GRADE_STEPS; j++) {
 
-    // Grading Logic: Calculate multiplier based on position (Bass vs Treble)
-    double grade = ((double)j / (double)(LOGICAL_GROUPS_NEEDED - 1));
+    // Grading Logic: Calculate multiplier based on curve index (Bass vs Treble)
+    double grade = ((double)j / (double)(VEL_GRADE_STEPS - 1));
     double multiplier = (1.0 + (VELOCITY_MAP_STRETCH / 2.0)) - (grade * VELOCITY_MAP_STRETCH);
 
     int lastV = 127;
     for (int i = 0; i < VEL_MAP_LENGTH; i++) {
-      if (i < 200) { velocityMap[j][i] = 127; continue; } // Clamp noise/impossibly fast hits
+      // log(Dist / 0) is undefined; a zero flight time is the fastest possible hit.
+      // No wider clamp here: the curve saturates at 127 by itself, and clamping
+      // e.g. everything below 200us would create a jump in the treble curves.
+      if (i == 0) { velocityMap[j][i] = 127; continue; }
 
       // The Physics Formula: v = Multiplier * (Offset + Log(Dist / Time))
       double calc = VEL_LOG_MULTIPLIER * log(VEL_DISTANCE_FACTOR / (double)i) / log(10.0);
@@ -317,7 +336,7 @@ void loop() {
     if (PIANO_SIZE == 88 && g == 17) { noteD = 0; noteE = 0; }
     else { noteD = startNote + 3; noteE = startNote + 4; }
 
-    activeMapGroup = g;
+    activeMapGroup = GROUP_VELOCITY_CURVE[g];
     scanGroup();
 
     // 4. Deactivate Group (Transceivers disabled, High Impedance / HIGH)
