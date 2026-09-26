@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Host tests for the Cybrid firmware: builds each sketch against the hardware simulation in
-# sim_arduino.h and checks that
-#   1. V1.2 (tested on the instrument) and V1.3 produce identical MIDI output on the
-#      simulated 85-key instrument with CyberGene's shorted cable line, with no bus or line fights;
-#   2. V1.3 configured for 88 keys and a healthy cable behaves the same on the first 85 keys
-#      and plays the 3 extra keys.
-# Usage: test/host/run.sh   (needs a C++17 compiler; set CXX to override)
-#        V13=path/to/other.ino test/host/run.sh   checks another sketch against V1.2
+# sim_arduino.h (85 keys, CyberGene's shorted cable line) and checks that V1.3
+#   1. passes the hardware and piano-behaviour checks built into sim.cpp;
+#   2. produces exactly the reviewed reference output in expected/v1_3.txt, so every change in
+#      behaviour shows up as a diff of that file (accept one with UPDATE_EXPECTED=1);
+#   3. configured for 88 keys and a healthy cable, behaves the same on the first 85 keys and plays
+#      the 3 extra keys.
+# V1.2 is also run and compared, for information only: it is the first firmware and the one the
+# instrument was voiced with, not a specification.
+# Usage: test/host/run.sh                     (needs a C++17 compiler; set CXX to override)
+#        UPDATE_EXPECTED=1 test/host/run.sh   accept V1.3's current output as the new reference
+#        V13=path/to/other.ino test/host/run.sh   test another sketch instead of V1.3
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -36,18 +40,33 @@ run() {
 
 status=0
 
-build v1_2 "$V12"
+EXPECTED="$HERE/expected/v1_3.txt"
+
 build v1_3 "$V13"
-run v1_2 || status=1
 run v1_3 || status=1
 
-if diff -q "$OUT/v1_2.txt" "$OUT/v1_3.txt" > /dev/null; then
-  echo "OK: V1.3 output identical to V1.2 ($(wc -l < "$OUT/v1_3.txt" | tr -d ' ') MIDI events)"
+if [ "${UPDATE_EXPECTED:-0}" = 1 ]; then
+  mkdir -p "$(dirname "$EXPECTED")"
+  cp "$OUT/v1_3.txt" "$EXPECTED"
+  echo "UPDATED: $EXPECTED ($(wc -l < "$EXPECTED" | tr -d ' ') MIDI events) - review and commit the diff"
+elif diff -q "$EXPECTED" "$OUT/v1_3.txt" > /dev/null; then
+  echo "OK: V1.3 output matches the reference ($(wc -l < "$EXPECTED" | tr -d ' ') MIDI events)"
 else
-  echo "FAIL: V1.3 output differs from V1.2 (first differences below)"
-  diff "$OUT/v1_2.txt" "$OUT/v1_3.txt" | head -20
+  echo "FAIL: V1.3 output differs from the reference (first differences below)."
+  echo "      If the change is intended, run UPDATE_EXPECTED=1 test/host/run.sh and commit the new reference."
+  diff "$EXPECTED" "$OUT/v1_3.txt" | head -20
   status=1
 fi
+
+# Information only: how V1.3 compares with V1.2.
+build v1_2 "$V12"
+if run v1_2 2> "$OUT/v1_2.err"; then
+  v12_checks="passes the behaviour checks"
+else
+  v12_checks="fails $(grep -c '^FAIL' "$OUT/v1_2.err") behaviour check(s)"
+fi
+v12_diff=$(diff "$OUT/v1_2.txt" "$OUT/v1_3.txt" | grep -c '^[<>]' || true)
+echo "INFO: V1.2 $v12_checks; $v12_diff line(s) of MIDI output differ from V1.3"
 
 # V1.3 configured for an 88-key piano with a healthy cable.
 sed -e 's/^#define PIANO_SIZE 85/#define PIANO_SIZE 88/' -e 's/^#define FAULTY_LINE 16/#define FAULTY_LINE 0/' \

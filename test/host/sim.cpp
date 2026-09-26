@@ -1,11 +1,13 @@
 // Host simulation harness for the Cybrid firmware.
 //
 // Builds one sketch (SKETCH, passed by run.sh) against sim_arduino.h, plays a fixed set of scripted
-// hammer motions on every key, and prints every MIDI event to stdout. run.sh builds several
-// firmware versions and compares their outputs. The harness itself fails (exit 1) on:
-//   - two Teensy outputs fighting on a (shorted) cable line, or two note boards on the bus at once
-//   - a key that does not produce exactly one note-on per stroke in the velocity sweep
-//   - velocities outside 1-127, or velocity increasing with flight time
+// hammer motions on every key, and prints every MIDI event to stdout (run.sh compares that with
+// the reviewed reference output). The harness itself fails (exit 1) when the firmware breaks the
+// hardware or how a grand piano action behaves:
+//   - two Teensy outputs fighting on a (shorted) cable line, or note boards fighting on the bus
+//   - a stroke that does not sound exactly once and release once
+//   - velocities outside 1-127, or a faster hammer giving a softer note
+//   - wrong handling of repetition with the key held, aborted presses, rail rebounds, creeping presses
 #include "sim_arduino.h"
 
 #include <algorithm>
@@ -42,6 +44,7 @@ static const int FIRST_NOTE = 21;
 static const int LAST_NOTE = 20 + SIM_PIANO_KEYS;
 static const uint64_t LOOP_US = 9; // measured full-scan period of the real instrument
 static const uint64_t HOLD_US = 40; // how long the hammer stays within the strike point
+static const uint64_t GRACE_US = 1000; // the firmware sees a state change on its next scan; scenarios are 3 ms apart
 
 static void at(int note, uint64_t t, Zone z) { timeline[note].push_back({t, z}); }
 
@@ -57,70 +60,125 @@ static uint64_t stroke(int note, uint64_t t, uint64_t flightUs) {
   return t;
 }
 
+// A window of simulated time holding one scenario, and what every key must do in it.
+struct Window { const char *name; uint64_t from, to; };
+
+// Note-ons (velocity > 0) and note-offs of one key inside a window.
+static void notesIn(int note, const Window &w, std::vector<int> &ons, int &offs) {
+  ons.clear(); offs = 0;
+  for (auto &e : events)
+    if (e.type == 0 && e.a == note && e.t >= w.from && e.t <= w.to + GRACE_US) { if (e.b > 0) ons.push_back(e.b); else offs++; }
+}
+
+// Same velocity as an ordinary stroke with the same flight time, give or take the one step that
+// the ~9 us scan period can add or remove depending on where the edges fall between scans.
+static bool sameVelocity(int a, int b) { return b > 0 && a >= b - 1 && a <= b + 1; }
+
+static int failures = 0;
+static void expect(bool ok, int note, const Window &w, const char *what) {
+  if (ok) return;
+  fprintf(stderr, "FAIL: note %d, %s: %s\n", note, w.name, what);
+  failures++;
+}
+
 int main() {
   const uint64_t sweep[] = {150, 200, 250, 300, 400, 600, 1000, 2000, 4000, 8000, 13000};
   const int nSweep = sizeof(sweep) / sizeof(sweep[0]);
-  uint64_t t = 1000, sweepStart[16], sweepEnd[16];
+  std::vector<Window> sweepW;
+  uint64_t t = 1000;
 
   // 1. Velocity sweep: every key struck together with the same flight time.
   for (int s = 0; s < nSweep; s++) {
-    sweepStart[s] = t;
     uint64_t end = t;
     for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) end = std::max(end, stroke(n, t, sweep[s]));
-    sweepEnd[s] = end;
+    sweepW.push_back({"velocity sweep", t, end});
     t = end + 3000;
   }
+  auto sweepVel = [&](int note, uint64_t flight) {
+    std::vector<int> ons; int offs;
+    for (int s = 0; s < nSweep; s++)
+      if (sweep[s] == flight) { notesIn(note, sweepW[s], ons, offs); return ons.size() == 1 ? ons[0] : -1; }
+    return -1;
+  };
 
   // 2. Staggered chord: different start times and flight times on every key.
-  {
-    uint64_t end = t;
-    for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
-      int k = n - FIRST_NOTE;
-      end = std::max(end, stroke(n, t + 13 * k, 150 + 97 * ((k * 7) % 60)));
-    }
-    t = end + 3000;
+  Window chord = {"staggered chord", t, t};
+  for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
+    int k = n - FIRST_NOTE;
+    chord.to = std::max(chord.to, stroke(n, t + 13 * k, 150 + 97 * ((k * 7) % 60)));
   }
+  t = chord.to + 3000;
 
-  // 3. Repetition with the key held (hammer falls to the damper zone only), 4. an aborted
-  // slow press followed by a real stroke, 5. escapement-zone rebound without a re-strike,
-  // 6. a creeping press slower than the velocity table.
+  // 3-6: the same timeline on every key.
+  // 3. Repetition with the key held: after the strike the hammer is caught by the backcheck,
+  //    which is below the escapement point but above the damper point, and is struck again.
+  Window rep = {"repetition with key held", t, 0};
   for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
     uint64_t u = t;
     at(n, u, DAMPER); at(n, u += 300, ESCAP); at(n, u += 400, STRIKE); at(n, u += HOLD_US, ESCAP);
-    at(n, u += 200, DAMPER); at(n, u += 3000, ESCAP); at(n, u += 800, STRIKE); at(n, u += HOLD_US, ESCAP);
+    at(n, u += 200, DAMPER); at(n, u += 3000, ESCAP); at(n, u += 1000, STRIKE); at(n, u += HOLD_US, ESCAP);
     at(n, u += 200, DAMPER); at(n, u += 1500, REST);
-    u += 3000;
+    rep.to = u;
+  }
+  t = rep.to + 3000;
+  // 4. Aborted press: the hammer reaches the escapement point, falls back without striking,
+  //    then a real stroke follows; its velocity must come from the second approach only.
+  Window abort = {"aborted press", t, 0};
+  for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
+    uint64_t u = t;
     at(n, u, DAMPER); at(n, u += 300, ESCAP); at(n, u += 1000, DAMPER); at(n, u += 2000, ESCAP);
     at(n, u += 600, STRIKE); at(n, u += HOLD_US, ESCAP); at(n, u += 200, DAMPER); at(n, u += 1500, REST);
-    u += 3000;
+    abort.to = u;
+  }
+  t = abort.to + 3000;
+  // 5. Rebound off the stop rail: the hammer bounces within the escapement zone and touches the
+  //    strike point again. A real hammer cannot be re-struck from there, so this is one note.
+  Window bounce = {"rebound off the rail", t, 0};
+  for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
+    uint64_t u = t;
     at(n, u, DAMPER); at(n, u += 300, ESCAP); at(n, u += 500, STRIKE); at(n, u += HOLD_US, ESCAP);
     at(n, u += 300, STRIKE); at(n, u += HOLD_US, ESCAP); at(n, u += 200, DAMPER); at(n, u += 1500, REST);
-    u += 3000;
-    u = stroke(n, u, 20000);
-    if (n == LAST_NOTE) t = u + 3000;
+    bounce.to = u;
   }
+  t = bounce.to + 3000;
+  // 6. Creeping press, slower than the velocity table: the softest possible note.
+  Window creep = {"creeping press", t, 0};
+  for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) creep.to = stroke(n, t, 20000);
+  t = creep.to + 3000;
 
   setup();
   while (nowUs < t) { loop(); nowUs += LOOP_US; }
 
-  int failures = 0;
   if (lineFights || busFights) {
     fprintf(stderr, "FAIL: %ld cable-line fights, %ld bus fights\n", lineFights, busFights);
     failures++;
   }
+  std::vector<int> ons; int offs;
   for (int n = FIRST_NOTE; n <= LAST_NOTE; n++) {
+    // Every stroke sounds once and is released once; faster flight never gives a softer note.
     int prev = 128;
     for (int s = 0; s < nSweep; s++) {
-      int ons = 0, vel = 0;
-      for (auto &e : events)
-        if (e.type == 0 && e.a == n && e.b > 0 && e.t >= sweepStart[s] && e.t <= sweepEnd[s]) { ons++; vel = e.b; }
-      if (ons != 1 || vel < 1 || vel > 127 || vel > prev) {
-        fprintf(stderr, "FAIL: note %d, flight %llu us: %d note-on(s), velocity %d (previous %d)\n",
-                n, (unsigned long long)sweep[s], ons, vel, prev);
-        failures++;
-      }
-      prev = vel;
+      notesIn(n, sweepW[s], ons, offs);
+      bool ok = ons.size() == 1 && offs == 1 && ons[0] >= 1 && ons[0] <= 127 && ons[0] <= prev;
+      char what[96];
+      snprintf(what, sizeof what, "flight %llu us gave %zu note-on(s), %d note-off(s), velocity %d (previous %d)",
+               (unsigned long long)sweep[s], ons.size(), offs, ons.empty() ? 0 : ons.back(), prev);
+      expect(ok, n, sweepW[s], what);
+      if (!ons.empty()) prev = ons.back();
     }
+    notesIn(n, chord, ons, offs);
+    expect(ons.size() == 1 && offs == 1, n, chord, "expected one note-on and one note-off");
+    notesIn(n, rep, ons, offs);
+    expect(ons.size() == 2 && offs == 1, n, rep, "expected two note-ons (no release in between) and one note-off");
+    expect(ons.size() == 2 && sameVelocity(ons[0], sweepVel(n, 400)) && sameVelocity(ons[1], sweepVel(n, 1000)), n, rep,
+           "repeated strikes must be timed like ordinary strokes");
+    notesIn(n, abort, ons, offs);
+    expect(ons.size() == 1 && offs == 1 && sameVelocity(ons[0], sweepVel(n, 600)), n, abort,
+           "expected one note timed from the second approach to the escapement point");
+    notesIn(n, bounce, ons, offs);
+    expect(ons.size() == 1 && offs == 1, n, bounce, "expected a single note");
+    notesIn(n, creep, ons, offs);
+    expect(ons.size() == 1 && offs == 1 && ons[0] == 1, n, creep, "expected one note with velocity 1");
   }
 
   for (auto &e : events) printf("%llu %s %d %d\n", (unsigned long long)e.t, e.type ? "cc" : "note", e.a, e.b);
