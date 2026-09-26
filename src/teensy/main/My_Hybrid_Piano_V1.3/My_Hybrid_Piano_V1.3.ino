@@ -62,6 +62,11 @@
 
 #include <ADC.h>
 
+// Forced inline: the pin numbers must reach digitalReadFast() as compile-time constants.
+// Otherwise every read goes through a pin lookup table, doubling the scan time.
+static inline __attribute__((always_inline)) void scanGroup();
+static inline __attribute__((always_inline)) void checkHammerState(int strikePin, int escapPin, int damperPin);
+
 // =============================================================
 // --- USER CONFIGURATION --------------------------------------
 // =============================================================
@@ -86,18 +91,27 @@
 /**
  * MATRIX SETTLING TIME (Nanoseconds):
  * -------------------------------------------------------------
- * The mandatory "Dead Time" between disabling one Group and enabling the next.
+ * Wait between ENABLING a group and reading its 15 lines.
  * * HARDWARE CONTEXT:
  * - Groups use SN74LVC245A Transceivers (Active Push-Pull).
- * - Shared 1.5m IDC ribbon cable.
+ * - Shared 1.5m IDC ribbon cable with 17-18 connectors (stubs).
  * * WHY THE DELAY IS NEEDED:
- * 1. BUS CONTENTION: Ensures the previous transceiver is fully disconnected (High-Z)
- * before the next one starts driving. Overlap causes short-circuits.
- * 2. BUS STABILIZATION: Works with INPUT_PULLUP to ensure lines return to
- * the Idle (HIGH) state cleanly between switches, preventing "Ghost Notes."
- * * TUNING: 100ns is safe. Increase if ghosting occurs.
+ * The newly enabled transceiver must drive the long cable to a clean level;
+ * reflections from the connector stubs take several round trips to die out.
+ * Reading too early gives stale or wrong levels ("ghost notes").
+ * * TUNING: V1.2 worked with ~40-110ns (4 dummy reads); 100ns adds margin.
+ * Increase if ghosting occurs.
  */
 #define MATRIX_SETTLING_DELAY_NS 100
+
+/**
+ * MATRIX DEAD TIME (Nanoseconds):
+ * -------------------------------------------------------------
+ * Gap between DISABLING one group and ENABLING the next, so two transceivers
+ * never drive the shared lines at the same time. The SN74LVC245A needs up to
+ * ~8ns to release its outputs (tPHZ/tPLZ at 3.3V); 20ns covers that plus skew.
+ */
+#define MATRIX_DEAD_TIME_NS 20
 
 // PEDAL SCAN INTERVAL:
 // 5ms = 200Hz at most, and only while the pedal moves (see the noise gate in processPedal).
@@ -329,7 +343,7 @@ void loop() {
     // 1. Activate Group (Transceivers enabled, Active LOW)
     digitalWriteFast(linePin, LOW);
 
-    // 2. Settling Time (Dead Time + Stabilization)
+    // 2. Settling Time (cable stabilization before reading)
     delayNanoseconds(MATRIX_SETTLING_DELAY_NS);
 
     // 3. Define MIDI Notes for this Group
@@ -342,6 +356,9 @@ void loop() {
 
     // 4. Deactivate Group (Transceivers disabled, High Impedance / HIGH)
     digitalWriteFast(linePin, HIGH);
+
+    // 5. Dead Time (the next group must not drive the lines before this one lets go)
+    delayNanoseconds(MATRIX_DEAD_TIME_NS);
     startNote += 5;
   }
 
@@ -357,7 +374,7 @@ void loop() {
 /**
  * Scans the 5 hammers in the active group.
  */
-void scanGroup() {
+static inline void scanGroup() {
   activeMidiNote = noteA; if (activeMidiNote != 0) checkHammerState(N1_STRIKE, N1_ESCAP, N1_DAMPER);
   activeMidiNote = noteB; if (activeMidiNote != 0) checkHammerState(N2_STRIKE, N2_ESCAP, N2_DAMPER);
   activeMidiNote = noteC; if (activeMidiNote != 0) checkHammerState(N3_STRIKE, N3_ESCAP, N3_DAMPER);
@@ -369,7 +386,7 @@ void scanGroup() {
  * LOGIC: Determines Hammer State based on Proximity Thresholds.
  * We scan from ClOSEST (Strike) to FURTHEST (Damper).
  */
-void checkHammerState(int strikePin, int escapPin, int damperPin) {
+static inline void checkHammerState(int strikePin, int escapPin, int damperPin) {
 
   // 1. STRIKE ZONE (Closest Proximity)
   // Logic: The hammer is at the peak of travel, closest to the rail.
