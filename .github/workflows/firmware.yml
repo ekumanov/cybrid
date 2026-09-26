@@ -1,0 +1,44 @@
+name: Firmware
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-test:
+    name: Host simulation tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run V1.2 vs V1.3 simulation
+        run: test/host/run.sh
+
+  build:
+    name: Build (PlatformIO)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: platformio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+      - name: Install PlatformIO
+        run: pip install platformio
+      - name: Build all sketches
+        run: pio run -e v1_3 -e v1_2 -e v1_3_teensy36 -e calibrate_1 -e calibrate_2 -e calibrate_3
+      - name: Collect firmware
+        run: |
+          mkdir -p dist
+          for dir in .pio/build/*/; do
+            env_name=$(basename "$dir")
+            cp "$dir/firmware.hex" "dist/cybrid-$env_name.hex"
+          done
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cybrid-firmware-${{ github.sha }}
+          path: dist/*.hex
