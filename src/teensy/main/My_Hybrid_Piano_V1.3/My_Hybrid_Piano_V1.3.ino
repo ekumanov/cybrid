@@ -100,9 +100,10 @@
 #define MATRIX_SETTLING_DELAY_NS 100
 
 // PEDAL SCAN INTERVAL:
-// 20ms = 50Hz. Prevents high-density MIDI CC data from clogging
-// older DAWs or software piano engines.
-#define PEDAL_SCAN_INTERVAL_MS 20
+// 5ms = 200Hz at most, and only while the pedal moves (see the noise gate in processPedal).
+// Limits CC64 traffic while keeping pedal latency low: pedalling is timed against
+// key releases, so e.g. a 20ms interval (10ms average delay) is noticeable in legato pedalling.
+#define PEDAL_SCAN_INTERVAL_MS 5
 
 // =============================================================
 
