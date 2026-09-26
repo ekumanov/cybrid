@@ -1,7 +1,8 @@
 # Cybrid V2 — Project Review & Redesign Plan
 
 *A review of Cybrid V1 (hardware as built, firmware V1.2 / V1.3) and a rough approach for a future major
-redesign. Revised after a netlist-level review of the PCBs; see [Revision notes](#9-revision-notes).*
+redesign. Revised after a netlist-level review of the PCBs, and again after a scan-timing analysis of the
+compiled firmware and the V1.3 rework; see [Revision notes](#9-revision-notes).*
 
 **TL;DR:** The sensing concept — optical hammer-shank detection with time-of-flight velocity — is excellent
 and should stay. The three things a V2 should eliminate are the 255–264 hand-tuned trimpots, the fixed
@@ -25,10 +26,23 @@ shared ribbon cable, measures the hammer's flight time between the escapement an
 maps it to MIDI velocity through a precomputed logarithmic table with per-group grading. A continuous
 half-pedal is read via ADC.
 
-Measured performance (on the instrument with V1.2; figures recorded in the V1.3 header): full-keyboard
-scan in ~9 µs (~112 kHz scan rate), velocity quantization at MIDI 127 of about one step. V1.3 adds a
-100 ns settling delay per group, so expect ~10–11 µs until re-measured. That is competitive with
-commercial scanners.
+**Scan speed.** The recorded figure is a full-keyboard scan of ~8.9 µs (~112 kHz, ~0.5 µs per group),
+measured with V1.2. Because that measurement is uncertain, the scan time was also derived from the
+compiled firmware: one idle `loop()` was run in an ARM emulator (Unicorn) to count every instruction and
+GPIO access exactly, and those counts were priced with published GPIO access times (Teensy 3.6: ~8
+cycles per pin read; Teensy 4.1: fast GPIO on the 600 MHz AHB bus, a few cycles). Estimates for one
+85-key scan, fast / **typical** / slow:
+
+| Firmware | Teensy 4.1 (600 MHz) | Teensy 3.6 (256 MHz) | Settling per group |
+|---|---|---|---|
+| V1.2 | 3.1 / **5.1** / 8.1 µs | 15.3 / **19.3** / 24.2 µs | ~40–110 ns (4 dummy reads) |
+| V1.3 as first committed | 8.4 / **11.8** / 16.0 µs | 22.2 / **27.1** / 33.6 µs | 100 ns |
+| V1.3 now (pipelined, port snapshots) | 2.8 / **3.6** / 5.0 µs | 9.6 / **11.6** / 14.5 µs | ≥100 ns + 20 ns dead time |
+
+The 8.9 µs figure fits only a Teensy 4.1; a Teensy 3.6 cannot scan that fast. At fortissimo (~300 µs
+flight time, ~0.14 velocity steps per µs) a 5 µs scan means at most ±0.7 steps of timing jitter —
+below what the ear resolves. That is competitive with commercial scanners, and a direct measurement
+with a cycle-counter benchmark build is still to be done on the instrument.
 
 ## 2. What's good — keep these ideas
 
@@ -41,9 +55,15 @@ commercial scanners.
   lost in a redesign.
 - **Zero heavy math in the hot path.** Velocity lookup is O(1); event logic is a small, correct state
   machine (strike / escapement / damper / rest, with latches preventing double-triggering).
+- **The detection logic matches a grand action.** Checked against piano mechanics rather than taken
+  on trust: velocity linear in log(flight time) is linear in log(hammer speed), i.e. in dB — the right
+  shape; a hammer caught by the backcheck rests below the escapement point, so repetition re-arms
+  without a full release; a rebound off the rail counts as one note; an aborted press (escapement
+  reached, no strike) is re-timed from the next approach. These are now executable checks (see §3,
+  Firmware).
 - **Sound low-level details.** Active-low logic with open-collector comparators pulled up to 3.3 V,
-  transceiver outputs enabled one group at a time, a settling delay after each group switch,
-  throttled and deadbanded pedal CC output.
+  transceiver outputs enabled one group at a time, a settling wait after each group switch, and a
+  deadbanded pedal CC output.
 - **Graded velocity.** The per-group velocity curves emulating graded hammer weight are a real musical
   feature — and in V1.2 they were hand-voiced on the instrument (the bass groups deliberately share
   flatter curves). That voicing is data worth preserving into V2.
@@ -72,7 +92,13 @@ commercial scanners.
 - **The IDC-34 cable.** One hand-crimped ribbon with 18 connectors and a single ground wire for
   fast-switching signals over ~1.5 m. It is a single point of failure and was, in practice: a line
   shorted to group 7 permanently disabled group 16, and the workaround (`FAULTY_LINE 16`) ships as the
-  *default* configuration of the reference firmware.
+  *default* configuration of the reference firmware. It is also what limits the scan: after a group is
+  enabled the cable needs time to settle (reflections from 17 connector stubs) — empirically about
+  40–110 ns, since V1.2 on a Teensy 4.1 needed four dummy reads before reading a group. V1.2 also
+  enabled the next group immediately after disabling the previous one, with no dead time, so two
+  transceivers could briefly drive the bus together (V1.3 now adds 20 ns), and on the first scan after
+  power-up it enabled all groups at once (harmless with the hammers at rest; V1.3 idles the lines HIGH
+  first).
 - **Power.** By the schematic values each CNY70 LED draws ~16 mA ((5 V − ~1.15 V) / 240 Ω), so 85 sensors
   take ~1.4 A — **about 7 W total**, not the ~2 W the README states (worth measuring). This runs through
   JST-XH connectors and solid-core wire daisy-chained over 17–18 boards, with only 100 nF ceramics on
@@ -90,13 +116,20 @@ commercial scanners.
   hand-soldering as an entry barrier.
 
 ### Firmware
-- **Two coexisting monoliths.** `My_Hybrid_Piano_V1.2.ino` (tested, heavily unrolled copy-paste) and
-  `My_Hybrid_Piano_V1.3.ino` (much cleaner, but never run on hardware, yet labeled "MASTER REFERENCE").
-  V1.3 as first committed silently changed behaviour in three ways — drove the shorted faulty line
-  against group 7, dropped V1.2's hand-voiced bass curves (bass up to 11 velocity steps louder), and
-  added a clamp that made the top treble jump by up to 11 steps. These are fixed now and its tables are
-  verified identical to V1.2, but V1.3 still needs a session on the instrument before it can replace
-  V1.2. The lesson for V2: behaviour-preserving refactors need a test that compares outputs.
+- **Two coexisting firmwares, the newer one unplayed.** `My_Hybrid_Piano_V1.2.ino` (the author's first
+  firmware, played daily, heavily unrolled copy-paste) and `My_Hybrid_Piano_V1.3.ino` (an AI-assisted
+  rewrite, never run on the instrument). V1.3 as first committed silently changed behaviour in three
+  ways — it drove the shorted faulty line against group 7, dropped V1.2's hand-voiced bass curves (bass
+  up to 11 velocity steps louder), and added a clamp that made the top treble jump by up to 11 steps —
+  and it was over twice as slow as V1.2, because GCC did not inline the per-key function, so every
+  input read went through a runtime pin lookup table. All of this is fixed, and V1.3 was then reworked:
+  each group's 15 inputs are captured with 4 GPIO port-register reads and processed while the next group
+  settles; the settling (≥100 ns) and dead-time (20 ns) waits are compile-time cycle counts; a build-time
+  check stops the build if an input pin is not on a snapshotted port; pedal updates every 5 ms instead of
+  20 ms. Its MIDI output is identical to V1.2 in simulation and it is estimated faster (see §1), but it
+  still needs a session on the instrument before it can replace V1.2.
+  Lessons for V2: behaviour-preserving changes need a test that compares outputs, and performance
+  claims have to be checked against the compiled code, not the source.
 - **Personal workarounds as defaults.** `PIANO_SIZE 85`, `FAULTY_LINE 16`, the author's specific
   pedal limits — a stranger flashing the reference firmware gets CyberGene's broken cable map.
 - **Calibration requires re-flashing.** Three separate sketches, uploaded in sequence, plus manual
@@ -110,8 +143,14 @@ commercial scanners.
 - **Magic constants with no recorded derivation.** `VEL_DISTANCE_FACTOR 1500.0` and `VEL_ADDITION 57.96`
   are redundant: the formula collapses to `v = m · (375.6 − 100 · log10(t_µs))`, i.e. one intercept and
   one slope. Nobody can adapt them to a different action geometry except by trial and error.
-- **No engineering scaffolding.** No PlatformIO project, no CI, no tests (the velocity math is pure
-  and trivially host-testable), no changelog, no releases.
+- **Engineering scaffolding — now partly in place.** There is a PlatformIO project (each sketch in its
+  own folder, one environment per sketch), a GitHub Actions workflow that builds everything and uploads
+  the `.hex` files, and host tests (`test/host`) that run the firmware against a simulation of the V1
+  hardware as traced from the netlists (group lines, the shorted cable line, the shared bus, the pin and
+  port mapping). The tests check the hardware (no two outputs or boards fighting), the piano behaviour
+  above (one note per stroke, faster hammer never softer, repetition with the key held, aborted
+  presses, rail rebounds, creeping presses), and a reviewed reference of V1.3's MIDI output, updated
+  deliberately. Still missing: a changelog, releases, and a measurement of the real scan time.
 
 ### Repository & professionalism
 - **No LICENSE file.** The README says "open-source", but legally the project isn't — nobody can
@@ -122,6 +161,8 @@ commercial scanners.
 - **The README does five jobs at once** — concept, build guide, calibration manual, parts list,
   and raw email dumps — with `TBD` markers unchanged since 2020 and no BOM.
 - **KiCad 5.0 (2018 format)** sources; current KiCad is several major versions ahead.
+- **Build tooling quirk.** With the Arduino IDE / arduino-cli on Apple Silicon, the sketch prototype
+  generator (`ctags`) is an Intel binary and needs Rosetta; the PlatformIO build does not.
 
 ## 4. The V2 decision: continuous sensing, software thresholds
 
@@ -202,6 +243,12 @@ velocity/calibration library written as portable C++ so the math runs under unit
 GitHub Actions builds every commit; releases ship flashable artifacts. All configuration lives in
 flash and is exposed over SysEx — flashing is never part of calibration again.
 
+The V1 test approach carries over and gets stronger: the piano-behaviour checks become the
+specification of the detection code, and in V2 the inputs are *recorded hammer trajectories* from the
+Phase 1 rig instead of scripted zones, replayed through the scanner firmware on the host. Every
+firmware image also includes a diagnostic that reports scan/sample timing measured with the CPU cycle
+counter, so timing is measured on the device rather than estimated.
+
 **Companion app.** Browser-based (WebMIDI SysEx — zero install; WebSerial only for firmware update,
 since it is Chromium-only and Safari has no WebMIDI): live per-key position waveform, an auto-calibration
 wizard that encodes the README's manual procedure, per-key velocity curve editor seeded with V1.2's
@@ -236,15 +283,19 @@ V1.2's voicing (as per-key curves).
 ## 7. Roadmap
 
 **Phase 0 — make V1 presentable (no redesign; roughly a weekend).**
-Add a license (suggestion: CERN-OHL-P for hardware, MIT for firmware, CC-BY-4.0 for docs/photos) —
-without this nothing is actually open source. Tag the tested state (V1.2) as `v1.0` and create a GitHub
-release. Play-test the fixed V1.3 on the instrument (compare against V1.2 and re-measure scan time), then
-promote it or keep it marked experimental; make its defaults generic (`FAULTY_LINE 0`, 88 keys) with the
-author's settings in a separate config block. Restructure: `hardware/` (KiCad sources only; gerbers
-become release artifacts), `firmware/` (PlatformIO-ified V1.2/V1.3 + calibration sketches), `docs/`
-(README split into concept / build / calibration pages), photos resized into `docs/images/`. Write the
-BOM that has been "TBD" since 2020. Document the J1-J2-J5-J3-J4 connector order and the power findings
-above. Optionally, measure the real supply current and the strike-point trimpot voltages.
+*Done:* V1.3 regressions fixed and scan reworked; PlatformIO build; sketches in their own folders; host
+simulation tests with piano-behaviour checks and a reviewed reference output; GitHub Actions building
+all sketches and publishing `.hex` artifacts.
+*Remaining:* Add a license (suggestion: CERN-OHL-P for hardware, MIT for firmware, CC-BY-4.0 for
+docs/photos) — without this nothing is actually open source. Tag the tested state (V1.2) as `v1.0` and
+create a GitHub release. On the instrument: play-test V1.3 against V1.2 and measure the real scan time
+with a cycle-counter benchmark build (raise `MATRIX_SETTLING_DELAY_NS` if ghost notes appear); then
+promote V1.3 or keep it marked experimental. Make its defaults generic (`FAULTY_LINE 0`, 88 keys) with
+the author's settings in a separate config block. Restructure: `hardware/` (KiCad sources only; gerbers
+become release artifacts), `firmware/`, `docs/` (README split into concept / build / calibration
+pages), photos resized into `docs/images/`. Write the BOM that has been "TBD" since 2020. Document the
+J1-J2-J5-J3-J4 connector order and the power findings above. Optionally, measure the real supply
+current and the strike-point trimpot voltages.
 
 **Phase 1 — feasibility rig (one octave).**
 Prototype one scanner board (MCU + 11 CNY70 channels) mounted beside the existing V1 electronics on
@@ -280,13 +331,32 @@ damper/key sensing add-ons.
   non-issue; modulated LED drive is the fallback if not.
 - **Firmware updates across 9 MCUs** — needs a bus bootloader or hub-proxied update (the STM32 ROM
   bootloader helps); decide in Phase 2, design the protocol for it in Phase 1.
+- **Simulation vs. the real bus** — V1.3's timing and behaviour are verified only in simulation and by
+  estimate; the real cable's settling time is known only indirectly (V1.2's four dummy reads). The
+  play-test and on-device measurement in Phase 0 close this gap.
 - **Scope discipline** — each phase ends in something usable (a clean V1 repo, a validated octave, a
   playable alpha, a shareable release), so the project can pause at any phase without being wasted.
 
 ## 9. Revision notes
 
-Changes from the first version of this plan, after tracing the KiCad netlists and PCB copper and
-comparing the two firmware versions line by line:
+**Second revision** — after deriving the scan time from the compiled firmware and reworking V1.3:
+
+- **Scan speed:** added the emulator-based estimates for V1.2 and V1.3 on both boards; the recorded
+  8.9 µs fits only a Teensy 4.1; timing jitter is shown to be inaudible either way.
+- **Firmware:** V1.3 was 2× slower than V1.2 because GCC did not inline the per-key function; it is now
+  pipelined with port snapshots, compile-time waits and a dead time, estimated at 3.6 µs typical
+  (V1.2: 5.1 µs). Pedal updates every 5 ms instead of 20 ms.
+- **V1.2 as reference:** V1.2 is the author's first firmware, not a specification. Its detection logic
+  was checked against grand-action mechanics (added to §2); tests now check that behaviour and a
+  reviewed reference output instead of "identical to V1.2". The bass voicing is kept because the
+  trimpots were calibrated by ear together with it.
+- **Cable:** empirical settling time (~40–110 ns), the missing dead time and the all-groups-enabled
+  first scan added to §3.
+- **Tooling:** PlatformIO, CI and host tests are in place (Phase 0 progress); V2 firmware inherits the
+  test approach with recorded trajectories and an on-device timing diagnostic.
+
+**First revision** — after tracing the KiCad netlists and PCB copper and comparing the two firmware
+versions line by line:
 
 - **Power:** corrected "~2 W" to ~7 W (from 240 Ω LED resistors); added the USB power limits, missing bulk
   capacitance, unprotected dual 5 V inputs, and back-feeding when the Teensy is unpowered.
