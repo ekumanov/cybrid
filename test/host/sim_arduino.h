@@ -124,6 +124,74 @@ inline void delay(unsigned long) {}
 inline void delayMicroseconds(unsigned long) {}
 inline void delayNanoseconds(unsigned long) {}
 
+// Teensy 4.1 GPIO port registers GPIO6-9_PSR. Reading one returns the current level of the
+// check point pins on it (from the same bus model as digitalReadFast); other bits read 1.
+#define __IMXRT1062__ 1
+namespace sim {
+struct PortPin { int pin, port, bit; };
+// CORE_PINn_PINREG / CORE_PINn_BITMASK of the Teensy 4.1 core for the 15 check point pins.
+const PortPin PORT_PINS[15] = {
+  {32, 7, 12}, {31, 8, 22}, {30, 8, 23}, {29, 9, 31}, {27, 6, 31}, {28, 8, 18}, {25, 6, 13}, {24, 6, 12},
+  {26, 6, 30}, {34, 7, 29}, {33, 9, 7}, {9, 7, 11}, {10, 7, 0}, {11, 7, 2}, {12, 7, 1}};
+struct GpioPort {
+  int port;
+  operator uint32_t() const {
+    uint32_t v = 0xFFFFFFFFu;
+    for (const PortPin &p : PORT_PINS)
+      if (p.port == port && readInput(p.pin) == LOW) v &= ~(1u << p.bit);
+    return v;
+  }
+};
+extern GpioPort gpio6, gpio7, gpio8, gpio9;
+}
+#define GPIO6_PSR sim::gpio6
+#define GPIO7_PSR sim::gpio7
+#define GPIO8_PSR sim::gpio8
+#define GPIO9_PSR sim::gpio9
+#define CORE_PIN32_PINREG GPIO7_PSR
+#define CORE_PIN31_PINREG GPIO8_PSR
+#define CORE_PIN30_PINREG GPIO8_PSR
+#define CORE_PIN29_PINREG GPIO9_PSR
+#define CORE_PIN27_PINREG GPIO6_PSR
+#define CORE_PIN28_PINREG GPIO8_PSR
+#define CORE_PIN25_PINREG GPIO6_PSR
+#define CORE_PIN24_PINREG GPIO6_PSR
+#define CORE_PIN26_PINREG GPIO6_PSR
+#define CORE_PIN34_PINREG GPIO7_PSR
+#define CORE_PIN33_PINREG GPIO9_PSR
+#define CORE_PIN9_PINREG GPIO7_PSR
+#define CORE_PIN10_PINREG GPIO7_PSR
+#define CORE_PIN11_PINREG GPIO7_PSR
+#define CORE_PIN12_PINREG GPIO7_PSR
+#define CORE_PIN32_BITMASK (1u << 12)
+#define CORE_PIN31_BITMASK (1u << 22)
+#define CORE_PIN30_BITMASK (1u << 23)
+#define CORE_PIN29_BITMASK (1u << 31)
+#define CORE_PIN27_BITMASK (1u << 31)
+#define CORE_PIN28_BITMASK (1u << 18)
+#define CORE_PIN25_BITMASK (1u << 13)
+#define CORE_PIN24_BITMASK (1u << 12)
+#define CORE_PIN26_BITMASK (1u << 30)
+#define CORE_PIN34_BITMASK (1u << 29)
+#define CORE_PIN33_BITMASK (1u << 7)
+#define CORE_PIN9_BITMASK (1u << 11)
+#define CORE_PIN10_BITMASK (1u << 0)
+#define CORE_PIN11_BITMASK (1u << 2)
+#define CORE_PIN12_BITMASK (1u << 1)
+
+// CPU cycle counter: jumps ahead on every read, so busy-waits end at once (simulated time
+// advances per loop() call only, which keeps different firmware versions comparable).
+#define F_CPU 600000000
+namespace sim {
+extern uint32_t cycleCounter, demcr, dwtCtrl;
+inline uint32_t readCycleCounter() { return cycleCounter += 1000; }
+}
+#define ARM_DWT_CYCCNT (sim::readCycleCounter())
+#define ARM_DEMCR sim::demcr
+#define ARM_DEMCR_TRCENA (1u << 24)
+#define ARM_DWT_CTRL sim::dwtCtrl
+#define ARM_DWT_CTRL_CYCCNTENA 1u
+
 struct elapsedMicros {
   uint64_t start = sim::nowUs;
   operator unsigned long() const { return (unsigned long)(sim::nowUs - start); }
