@@ -23,8 +23,10 @@ MODELS = {
         "Connector_IDC.3dshapes/IDC-Header_2x17_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, -90)),
     "Pin_Headers:Pin_Header_Straight_1x02_Pitch2.54mm": (
         "Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x02_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, 0)),
+    # Note board J1-J5 (sensor cables): the footprint is on the front, but the headers are soldered
+    # on the BACK of the board, so the model is flipped under the 1.6 mm board.
     "Pin_Headers:Pin_Header_Straight_1x03_Pitch2.54mm": (
-        "Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x03_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, 0)),
+        "Connector_PinHeader_2.54mm.3dshapes/PinHeader_1x03_P2.54mm_Vertical.step", (0, 0, -1.6), (0, 180, 0)),
     "Pin_Headers:Pin_Header_Straight_2x09_Pitch2.54mm": (
         "Connector_PinHeader_2.54mm.3dshapes/PinHeader_2x09_P2.54mm_Vertical.step", (0, 0, 0), (0, 0, 0)),
     "Socket_Strips:Socket_Strip_Straight_1x03_Pitch2.54mm": (

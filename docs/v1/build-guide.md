@@ -68,7 +68,8 @@ bottom, groups 10–18. Group 1 is the lowest part of the keyboard.
 - Each sensor board connects to its note board with a short female–female 3-wire Dupont cable, so
   both ends have male pins: a straight 1×3 header on the back of the note board, and a right-angle
   1×3 header on the sensor board, with the pins pointing off the end of the board, parallel to it.
-  I cut the 3-pin pieces from longer header strips (tedious). Before soldering these, check the mechanical placement on *your*
+  I cut the 3-pin pieces from longer header strips (tedious). The cables run in an arc from the back
+  of the note board to the end of the sensor board (see the photos below). Before soldering these, check the mechanical placement on *your*
   action: whether you need straight or angled connectors, and on which side, depends on how the
   cables can run. I spent a lot of time on this; the photos show where I ended up.
 - The action's brackets split the hammers into groups, so the sensors are not evenly spaced and
