@@ -8,9 +8,9 @@
 #      the 3 extra keys.
 # V1.2 is also run and compared, for information only: it is the first firmware and the one the
 # instrument was voiced with, not a specification.
-# Usage: test/host/run.sh                     (needs a C++17 compiler; set CXX to override)
-#        UPDATE_EXPECTED=1 test/host/run.sh   accept V1.3's current output as the new reference
-#        V13=path/to/other.ino test/host/run.sh   test another sketch instead of V1.3
+# Usage: firmware/v1/test/host/run.sh                  (needs a C++17 compiler; set CXX to override)
+#        UPDATE_EXPECTED=1 firmware/v1/test/host/run.sh   accept V1.3's current output as the new reference
+#        V13=path/to/other.ino firmware/v1/test/host/run.sh   test another sketch instead of V1.3
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -19,8 +19,8 @@ OUT="$ROOT/.pio/host-test"
 CXX="${CXX:-c++}"
 mkdir -p "$OUT"
 
-V12="${V12:-$ROOT/src/teensy/main/My_Hybrid_Piano_V1.2/My_Hybrid_Piano_V1.2.ino}"
-V13="${V13:-$ROOT/src/teensy/main/My_Hybrid_Piano_V1.3/My_Hybrid_Piano_V1.3.ino}"
+V12="${V12:-$ROOT/src/main/My_Hybrid_Piano_V1.2/My_Hybrid_Piano_V1.2.ino}"
+V13="${V13:-$ROOT/src/main/My_Hybrid_Piano_V1.3/My_Hybrid_Piano_V1.3.ino}"
 
 # build <name> <sketch> [extra compiler flags...]
 build() {
@@ -53,7 +53,7 @@ elif diff -q "$EXPECTED" "$OUT/v1_3.txt" > /dev/null; then
   echo "OK: V1.3 output matches the reference ($(wc -l < "$EXPECTED" | tr -d ' ') MIDI events)"
 else
   echo "FAIL: V1.3 output differs from the reference (first differences below)."
-  echo "      If the change is intended, run UPDATE_EXPECTED=1 test/host/run.sh and commit the new reference."
+  echo "      If the change is intended, run UPDATE_EXPECTED=1 firmware/v1/test/host/run.sh and commit the new reference."
   diff "$EXPECTED" "$OUT/v1_3.txt" | head -20
   status=1
 fi
