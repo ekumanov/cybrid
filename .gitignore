@@ -1,10 +1,30 @@
-# Created by .ignore support plugin (hsz.mobi)
-.idea/cybrid.iml
-.idea/markdown-navigator.xml
-.idea/markdown-navigator/
-.idea/modules.xml
-.idea/vcs.xml
-.idea/markdown-navigator-enh.xml
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
 
-# PlatformIO
+# Claude Code local settings
+.claude/settings.local.json
+
+# PlatformIO / host-test build output
 .pio/
+
+# KiCad: per-user state, backups, caches, locks and local history
+*.kicad_prl
+*-backups/
+.history/
+_autosave-*
+*.bak
+*-bak
+~*.lck
+fp-info-cache
+*.kicad_sch.lck
+*.kicad_pcb.lck
+
+# KiCad: generated outputs (run hardware/v1/export.sh; CI attaches them to each run)
+hardware/*/build/
+*.gbr
+*.gbrjob
+*.drl
+*.pos
