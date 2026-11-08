@@ -2,12 +2,18 @@ name: Firmware
 
 on:
   push:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
   pull_request:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
   workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: firmware/v1
 
 jobs:
   host-test:
-    name: Host simulation tests
+    name: Host simulation tests (V1)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,7 +21,7 @@ jobs:
         run: test/host/run.sh
 
   build:
-    name: Build (PlatformIO)
+    name: Build (PlatformIO, V1)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,7 +31,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.platformio
-          key: platformio-${{ runner.os }}-${{ hashFiles('platformio.ini') }}
+          key: platformio-${{ runner.os }}-${{ hashFiles('firmware/v1/platformio.ini') }}
       - name: Install PlatformIO
         run: pip install platformio
       - name: Build all sketches
@@ -40,5 +46,5 @@ jobs:
           ls -l dist
       - uses: actions/upload-artifact@v4
         with:
-          name: cybrid-firmware-${{ github.sha }}
-          path: dist/*.hex
+          name: cybrid-v1-firmware-${{ github.sha }}
+          path: firmware/v1/dist/*.hex

@@ -1,0 +1,25 @@
+name: Hardware
+
+on:
+  push:
+    paths: ["hardware/**", ".github/workflows/hardware.yml"]
+  pull_request:
+    paths: ["hardware/**", ".github/workflows/hardware.yml"]
+  workflow_dispatch:
+
+jobs:
+  export-v1:
+    name: Export V1 (schematics, BOM, Gerbers, renders, ERC/DRC)
+    runs-on: ubuntu-latest
+    container:
+      # The -full image includes KiCad's 3D models, needed for the renders.
+      image: kicad/kicad:10.0-full
+      options: --user root
+    steps:
+      - uses: actions/checkout@v4
+      - name: Export
+        run: hardware/v1/export.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cybrid-v1-hardware-${{ github.sha }}
+          path: hardware/v1/build/

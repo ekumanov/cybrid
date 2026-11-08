@@ -1,0 +1,16 @@
+Cybrid is open source under three licenses, one for each kind of material.
+Copyright (c) 2020-2026 Evgeni Kumanov.
+
+  Hardware   hardware/                  CERN Open Hardware Licence v2 - Permissive
+                                        (SPDX: CERN-OHL-P-2.0)   LICENSES/CERN-OHL-P-2.0.txt
+  Software   firmware/, hardware/*/tools/, hardware/*/export.sh, .github/
+                                        MIT License (SPDX: MIT)  LICENSES/MIT.txt
+  Docs       README.md, docs/ (text, photos, renders)
+                                        Creative Commons Attribution 4.0 International
+                                        (SPDX: CC-BY-4.0)        LICENSES/CC-BY-4.0.txt
+
+In short: you may use, modify, build, sell and share all of it, including commercially. Keep the
+copyright notice and licence with what you redistribute; for the docs and photos, credit
+"Evgeni Kumanov (CyberGene), Cybrid project" with a link to https://github.com/ekumanov/cybrid.
+
+The full licence texts in LICENSES/ are the binding terms.
